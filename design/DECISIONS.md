@@ -48,3 +48,9 @@ To change a decision, don't delete the old line. Add a new one and mark the old 
 ## Implementation (agent choices)
 
 <!-- Coding agents may append technical choices here, one line each, with a reason. -->
+- 2026-11-27 — Simulator in Python 3.11+ with only pyyaml, numpy, matplotlib, pytest (stdlib `random` for draws, `concurrent.futures` for parallel seeds) — allowed list, nothing else needed.
+- 2026-11-27 — Random draws come from named streams keyed by (seed, system, day/job id), so offers, interruptions, costs and payment lateness are identical across policies for a seed — reproducible per (config, policy, seed) and fair policy comparisons.
+- 2026-11-27 — The whole offer stream of a run is generated up front; only the greedy-optimal policy may read it — makes the "no hidden future state" rule checkable (`Policy.uses_foresight`).
+- 2026-11-27 — Player-behaviour numbers live in `data/policies.yaml` (simulator-only), economy numbers in `data/economy.yaml` — keeps economy.yaml clean for the game while keeping every number out of code.
+- 2026-11-27 — Recommended tuning changes are an overlay, `data/economy.recommended.yaml`, applied on top of economy.yaml for the re-run — the owner can review them before they become the game's numbers.
+- 2026-11-27 — Bankruptcy does not stop a simulated run; it is flagged and the run continues to day 42 — the spec calls it an ending path, and stress/relationship metrics stay comparable across runs.

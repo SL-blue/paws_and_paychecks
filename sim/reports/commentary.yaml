@@ -1,0 +1,276 @@
+# Written commentary for SIM_REPORT.md, merged in by sim/src/report.py. Tables come from the data.
+intro: |
+  This report covers the economy simulation specified in `design/SIM_BASELINE.md` §9 (v0.2): five player
+  policies × {with effects, no effects} × {book unpaid, small advance}, a starting-cash search, a ±25% sensitivity
+  sweep, and a re-run with recommended config changes. Numbers come from `data/economy.yaml`. Player behaviour comes
+  from `data/policies.yaml`. Interpretation choices for ambiguous parts of the spec are listed in §8.
+
+  **Headlines**
+  - **Starting cash of $1,400 meets 4 of the 5 cash-sensitive targets.** Careful's lowest cash lands in days 28–35
+    in 58% of runs (target 60%). The other low point is day 5: week-1 bills arrive before the first pre-move invoice.
+  - **The economy separates the strategies as intended.** Careful is safe (1% bankrupt). Book-heavy is risky but
+    viable (27%). Careless fails (76%). Grinding is financially safe (1%) but costs stress, the relationship and the
+    pet. Greedy-optimal earns about 2× careful but never reaches a good combined ending.
+  - **Two targets fail for structural reasons, not tuning reasons.**
+    1. Effects: the offer pool is too small. Every engaged policy ends up holding nearly the whole pool, so the same
+       effects appear in 100% of top-decile runs.
+    2. Feedback: work done in week 1 can't pay in week 1 under 7-day agency terms. The target is met only if the
+       pre-move invoices count.
+  - **NET (tax share) is by far the strongest lever**, then rent, starting cash and offer rate. **The book advance
+    variant is a large balance decision:** it cuts book-heavy bankruptcy from 27% to 1%.
+  - **Recommended:** move the day-6 pre-move invoice to day 4, offer a work-milestone effect every 8th job instead of
+    every 4th, and set starting cash to $1,450. With these, all policy targets are met except book-heavy at 30.2%
+    bankrupt (ceiling 30%; within sampling noise, but reported as a miss). The two structural failures remain and
+    need owner decisions (§8).
+
+toc: |
+  Sections: 1 Starting cash · 2 Summary per policy · 3 Acceptance targets · 4 Charts · 5 Effects · 6 Sensitivity ·
+  7 Recommended changes and re-run · 8 Open issues
+
+cash: |
+  **Why $1,400.** It is the only value that meets four of the five cash-sensitive targets with the smallest miss
+  (careful's low-point share, 58% vs. 60%). The usable window is narrow:
+  - Below $1,400, book-heavy goes over 30% bankrupt (39% at $1,200).
+  - Above $1,600, careless drops under 60% bankrupt, so carelessness stops being punished.
+
+  Careful's low-point share **does not improve with more cash**. That share depends on *when* the low comes, not how
+  low it is. Above $1,500 the careful policy also buys headphones on day 1, which deepens the week-1 dip. This is
+  the reason for the recommended invoice move in §7 rather than a cash change. The spec expected ~1,200–1,600; the
+  result is inside that range.
+
+summary: |
+  **Reading the table**
+  - **Effects matter a lot.** For careful they lift median end value from $1,667 to $2,625. They raise "book
+    finished" from 23% to 63%, because efficiency bonuses also speed up book hours. With effects off, careful's
+    bankruptcy rises from 1% to 5% and book-heavy's from 27% to 51%.
+  - **Grinder vs. careful.** The grinder works ~90% more paid hours than careful (345 h vs. 181 h) but ends only
+    ~25% richer (median $3,290 vs. $2,625). Stress above 50 costs efficiency, and the grinder misses deadlines (0.9 late jobs per run).
+    The stress→efficiency coupling works as designed: grinding pays a little, and costs a lot elsewhere.
+  - **Greedy-optimal is a heuristic search, not a true optimum.** It reaches ~$5,700 by taking the best-paying
+    offers with full knowledge of future offers. It works 10–12 h days, spends no time with her and only 1 h/day on
+    the pet. **The money system gives it no reason not to.** The only money cost of neglect is a higher pet bill.
+    This is by design (relationship and pet are not derived from money), so the ending has to carry that cost.
+  - **The book advance** ($400 gross per milestone) mostly helps the book-heavy player: bankruptcy falls 27% → 1%,
+    which makes book-heavy safer than the target band intends. Even at $800 starting cash (the bottom of the search
+    range), book-heavy with the advance is only 12% bankrupt (checked separately, 2,000 seeds). The advance and the
+    starting cash should be decided together.
+  - **The week-2 story job** (12,500 words, paid day 33) is accepted in only ~48% of careful runs and ~22% of
+    book-heavy runs. Their schedules are often too full on day 8. See Open issues.
+
+feedback: |
+  **Payment cadence.** Payments arrive steadily from week 2 on, and the median delivery-to-payment time is 7 days.
+  **Week 1 is the gap.** Only direct-client jobs (25% of offers, paid after 2–3 days) can pay inside week 1. A
+  careful run gets 0.6 job payments in week 1 on average. Counting the pre-move invoice on day 6, 98% of careful
+  runs are paid every week. Whether the target counts pre-move invoices is an open question (§8).
+
+targets: |
+  **Notes on the misses**
+  - **Careful low point (58%).** Just short of target; the recommendation in §7 fixes it.
+  - **Effects dominance (100%).** Structural (§5).
+  - **Feedback.** Met for every working policy only if pre-move invoices count (careless reaches 82%, which is
+    acceptable for a strategy meant to fail).
+  - **Caps.** No combination can exceed a cap, because the code clamps each category. But the efficiency cap
+    (+40%) is reached in 44% of all runs (99.7% of careful runs), mostly via morning person plus
+    context switcher or deep focus plus coworking. This is fine while no designed synergies exist.
+
+charts: |
+  Book-heavy and careless show a second drop around day 38. Those runs used the rent-late lifeline on day 31 and
+  must pay the rent plus the $75 fee by day 38. The grinder and greedy low points come in week 1, because their
+  week-2 income is large enough that the convergence week never becomes their lowest point.
+
+effects: |
+  **The pool is too small for the number of offers.**
+  - Offers: careful gets ~5 weekly + ~5.6 work-milestone + ~2.6 book-milestone offers + 1 shop buy, about 14 chances.
+  - Pool: only 10 effects can appear in offers (12 in the starter pool, minus 2 shop-only items).
+  - Result: careful holds ~11 of the 12 effects by the end (target 7–9), and later offers come from an almost empty
+    pool. The top decile therefore holds the same effects as everyone else (100%), and "pick 1 of 3" stops being a
+    choice in weeks 4–5.
+  - Even the spec's own expected counts (5 + 2–3 + 0–3 + 0–2 = 7–13 offers) need a larger pool. A pool of roughly
+    25–30 effects would keep late picks meaningful. Adding effects is a design decision for the owner.
+
+  **Strength and dead effects**
+  - The **CAT tool** is picked ~97% of the time by careful and ~100% by the grinder and greedy. Its +15% throughput
+    sits in its own category, so the efficiency cap doesn't limit it, and $30/week is cheap.
+  - **Fast invoicer** (13–21%) and **night owl** (16–17% for careful and book-heavy) are rarely chosen.
+  - **Her spreadsheet** has no mechanical benefit in the simulation. No policy uses a cash forecast, so it is a dead
+    effect here. Its value is narrative or UI.
+
+  **Effect boost vs. the §8.2 targets**
+  - Average over the run: +24% for careful (target +15–25%), met.
+  - Last 5 workdays: +27% (target +30–50%), slightly low. The cap and the late-offer lean away from efficiency hold
+    it down.
+
+sensitivity: |
+  **What moves the results most**
+  1. **NET factor** (±25% shifts careful's median end value from $1,333 to $3,911; book-heavy bankruptcy from 70% to
+     8%). Tax handling is the strongest economic lever. If the game shows a "tax jar", its rate is a key balance
+     number.
+  2. **Rent** and **starting cash** are almost mirror images. Each moves book-heavy bankruptcy by 20+ percentage
+     points.
+  3. **Offer rate.** It mainly affects the grinder's stress, since more offers mean more overwork, and book-heavy
+     bankruptcy.
+
+  **Little effect**
+  - **Late-payment share and the story job's size** change almost nothing. The late share is mostly absorbed by
+    lifelines, and the story job is often not taken.
+
+  **Book-finishing is a cliff**
+  - With 25% less remaining work, careful finishes the book in 100% of runs. With 25% more, in 0%.
+  - The careful policy's ~1.5–2.5 h/day book budget lands right on the 60–80 h range, so the book target is very
+    sensitive to the starting-progress range.
+
+recommended_intro: |
+  **Expected and observed effect.** After the changes, careful's low point falls in the convergence week in 64% of
+  runs. Work-milestone offers drop to ~2.4 per careful run, inside the §8.1 range. Effect boost falls slightly
+  (careful +22% average / +27% at the end). Book-heavy bankruptcy rises with fewer effects, and $1,450 brings it
+  back to 30.2%. That sits at the edge of the band; at 2,000 seeds the sampling error is about ±1 point.
+
+  **Why $1,450 and not $1,500.** At $1,500 the careful policy's shop rule buys headphones on day 1, and its low point
+  slips back to 59% in days 28–35. The window that meets both targets is narrow (~$1,450–1,500). The recommended
+  changes do not fix the effect-pool problem, which needs content (§8).
+
+recommended: ""
+
+open_issues: |
+  ### Needs an owner decision
+
+  1. **The effect pool is too small for the offer schedule (§5).** With 12 effects and ~11–14 picking chances per
+     careful run, everyone ends with nearly the full pool, and the "no effect in > 70% of the top decile" target
+     can't be met by tuning. Options:
+     - grow the pool to ~25–30 effects;
+     - cut offer sources (e.g. weekly reflections only in weeks 1, 3 and 5);
+     - let the player skip a pick.
+  2. **The feedback target counts which payments?** Job payments alone can't arrive in week 1 under the 7-day
+     agency terms, except for direct clients. Counting pre-move invoices, the target is met. If job-only is meant,
+     week 1 needs a fixed early direct-client job or shorter agency terms.
+  3. **Is the week-2 story job forced?** It is simulated as an ordinary day-8 offer that policies may decline, so the
+     intended week-5 squeeze only happens in ~48% of careful runs. If it is a fixed story event, the game should
+     make taking it (near) certain. That would make careful's convergence-week low more reliable.
+  4. **Book advance and starting cash interact.** The advance makes book-heavy almost risk-free (1% bankrupt). Even
+     at $800 starting cash it stays at 12%, below the 15–30% band. If the advance is kept, the book-heavy target
+     (or the advance size) needs revisiting, not just the starting cash.
+  5. **Neglect has no money cost** beyond the pet bill tier. Greedy-optimal and the grinder show that ignoring her
+     and the pet is the money-maximizing play. This is consistent with the design ("relationship is not a function
+     of money"), so the ending and story events must make that cost felt.
+  6. **Book-heavy bankruptcy with the recommendations is 30.2%** (ceiling 30%). Either accept this as within
+     sampling noise, or nudge starting cash toward $1,500. The latter pushes careful's low-point share back below 60%.
+
+  ### Degenerate strategies, dead or dominant effects
+
+  - **Grinding is financially safe** (≈1% bankrupt). It earns only ~25% more than careful, because stress cuts
+    efficiency, but money alone never punishes it.
+  - **Her spreadsheet** does nothing mechanically in the simulation (no policy uses a forecast).
+  - **Fast invoicer and night owl** are weak picks.
+  - **The CAT tool** is a near-automatic pick, because its category has no cap and its price is low.
+  - **The efficiency cap (+40%) is reached often.** Stacking morning person, deep focus and coworking already hits
+    it, so further efficiency picks are wasted.
+
+  ### Interpretation choices (simplest reading; please check)
+
+  **Time and stress**
+  - *Leisure for stress relief* = free hours left after sleep, routines (2 h), a 1 h lunch on workdays, paid work,
+    book, pet care and time with her, capped at 4 h/day (`day.leisure_hours_cap`). Time with her always counts.
+    Without a cap, a day off would remove ~25 stress points.
+  - *Interruptions* (0–25%) remove both paid and book time. Half of them count as pet interruptions (for the
+    coworking pass).
+  - *"Each consecutive short night after the first"* adds +3 once per night while the streak is at least 2.
+  - *"Deadline due tomorrow"* is +5 per job.
+  - *"A rush job in progress"* is +2 per day if any rush job is active.
+  - *Sleep* is the night after the day. Cutting it lowers the next day's efficiency.
+
+  **Offers and jobs**
+  - *Deadlines* are counted in working days, rounded up: est. hours ÷ 6 × U(1.1, 1.8), minimum 1. A job is due at
+    the end of that working day. Missing the deadline marks it late (−20% payment). Work continues until delivery.
+  - *Rush jobs* aren't specified, so they were set as follows: 15% of non-PE offers; deadline × 0.5; rate × 1.25.
+  - *Post-editing* pays $0.055/word for all clients.
+  - *The PE switch day* is uniform over days 8–21. The PE share is 25% before the switch and rises linearly to 50% by
+    day 36.
+  - *Reputation* is tracked per client type, as there are no individual clients. For 7 days after a missed deadline,
+    each offer from that type is dropped with 50% chance and pays × 0.9.
+  - *Direct-client network* = a second, independent stream of direct-client offers (doubling them). Each direct job
+    gets +1 h of unpaid revision work.
+
+  **Payments and lifelines**
+  - *Payments:* direct clients pay after 2–3 days (uniform), agencies after 7, slow agencies after 14. A 20% chance
+    of +3–7 days late is drawn per job, independent of the player.
+  - *The story job* is a fixed day-8 offer: 12,500 words, standard agency, normal deadline formula. It is paid on
+    day 33, or 7 days after delivery if that is later.
+  - *Crisis and bankruptcy*, checked at end of day:
+    1. If rent fell due today and rent-late is unused, it is deferred first (+$75, due within 7 days).
+    2. If cash is still below −$300 → bankrupt.
+    3. Otherwise the policy uses "pay early" (job invoices only, −10% of the smallest invoice that covers the gap)
+       and/or "borrow" (gap + $200, up to $800).
+    4. Still negative → bankrupt.
+  - *After bankruptcy*, the run continues to day 42 with no lifelines left. Her loan is not repaid in-run; it counts
+    as debt in the end value, as does unpaid deferred rent.
+
+  **Costs and the pet**
+  - *Transformation bill* tier odds (300/500/800) depend on pet-care deficit days before day 30: 0 days →
+    60/30/10%; 1–3 days → 30/40/30%; 4+ days → 10/40/50%.
+  - *Pet damage:* each deficit day has a 25% chance of a $20–150 damage cost.
+  - *Walk routine:* a skipped walk counts as 2 deficit days.
+  - *Stress illness:* stress above 85 for 2+ days gives a 15% daily chance of an illness day (no work, $0–80).
+
+  **Effects**
+  - *Shop:* headphones and the coworking pass are shop-only and never drawn in offers. Coworking costs $60/week from
+    purchase and adds 0.5 h of pet care on days worked there. CAT tool and coworking fees are charged weekly from
+    the day they are taken.
+  - *Morning person / night owl:* the first 4 work hours of a day count as "before 13:00"; hours beyond 8 count as
+    "after 19:00". Paid work comes first in the day, then the book.
+  - *Deep focus* counts paid projects only. *Context switcher* counts paid projects plus the book as tasks.
+  - *Efficiency bonuses* also apply to book hours. The CAT tool does not.
+  - *Late-offer lean (§8.2):* from day 22, efficiency and throughput effects are drawn at half weight.
+  - *Morning pages'* 30 minutes come out of free time. Its book relief (3.5) is under the +50% stress-relief cap
+    (3.75).
+  - *The work-milestone offer* fires on every 4th delivered job, the story job included.
+
+  **Book**
+  - *Remaining work* maps linearly from starting progress: 75% done → 60 h left, 60% done → 80 h left. The
+    sensitivity row "book starting progress" scales this remaining work ±25%, rather than the progress share.
+  - *The small advance* is paid net (× 0.78) on reaching each milestone.
+
+  **Report measures**
+  - *Effect boost* = the effects' multiplier on paid-work output (efficiency × throughput), averaged over hours
+    worked. "End" = the last 5 days with paid work.
+  - *"Top decile"* = top 10% of runs by end money value, per policy.
+  - *"Good combined ending"* (simulator-only, for the greedy-optimal check): not bankrupt, ≤ 1 relationship week
+    missed, ≤ 4 pet-care deficit days, ≤ 6 days with stress > 70.
+  - *The feedback target* is scored as "≥ 90% of runs get a payment in each of weeks 1–6".
+
+  ### Modelling of player strategies (`data/policies.yaml`)
+
+  - **Careful:**
+    - 6.5 paid h on weekdays, plus up to 2 h when a deadline is at risk (up to 4 h on weekends, only then).
+    - Book 1.5 h on weekdays, 2.5 h on weekends.
+    - Meets her needs: Mon/Wed/Fri evenings, or Tue/Thu + a Saturday half-day in her crunch weeks. Meets pet care.
+    - Sleeps 8 h, cutting 1 h only when behind.
+    - Accepts offers in $/h order if an earliest-deadline-first (EDF) check at 80% efficiency still fits.
+    - Buys headphones once cash ≥ $1,500.
+  - **Book-heavy:** like careful, but 4.5 paid h and 2.5/3.5 h of book; buys headphones at ≥ $1,800.
+  - **Grinder:**
+    - 9.5 h on weekdays and 8 h on weekends; sleeps 6–7 h on weekdays and 7 h on weekends.
+    - Covers pet care fully on 60% of days.
+    - Spends one evening a week with her, a second with 50% chance, and a Saturday half-day with 50% chance.
+    - Picks effects by efficiency/rate value.
+    - Results depend on this weekend definition: with 6 h of weekend work and 8 h of sleep, its stress resets
+      every weekend and the stress target fails.
+  - **Careless:**
+    - 5.5 h on weekdays only, with no schedule check.
+    - Accepts 70% of offers at random and works on the book on 30% of days.
+    - Cuts sleep randomly on 30% of nights; covers pet care fully on 60% of days.
+    - Picks effects at random.
+  - **Greedy-optimal (search-based; reads hidden future state, as allowed):**
+    - For each seed, it simulates 12 plans: weekday hours {8, 10, 12} × weekend {0, 6} × sleep {8, 6}.
+    - In each plan it pre-selects jobs from the full offer stream by net $/h, keeping a job only if it fits the
+      remaining capacity between its offer day and deadline.
+    - It keeps the plan with the highest end value.
+    - Pet care 1 h/day, no time with her, no book.
+    - This is a strong heuristic, not a proven optimum.
+
+  ### Housekeeping
+
+  - **Starting cash in `data/economy.yaml`** is set to the search result (1400). The recommended overlay
+    (`data/economy.recommended.yaml`) is not merged; merging it is the owner's call.
+  - **Spec numbers** in `SIM_BASELINE.md` were not edited.
+  - **Not swept:** the leisure cap, the bankruptcy floor and the transformation odds aren't in the spec's
+    sensitivity list, but they will matter for balance.

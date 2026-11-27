@@ -1,0 +1,106 @@
+# Player strategies (policies) for the economy simulator. Simulator-only: the game does not read this file.
+# These numbers model *how players behave* (SIM_BASELINE.md §9.2); they are not economy rules.
+# Hours are per day. "eff_margin" = share of planned hours a policy expects to turn into finished work
+# when it checks whether a new job fits (interruptions, stress).
+
+careful:
+  weekday_paid_hours: 6.5     # 6-7 h/weekday
+  extra_paid_hours: 2         # extra weekday hours allowed when a deadline is at risk
+  weekend_paid_hours: 0       # planned weekend work
+  weekend_extra_hours: 4      # weekend hours allowed only when a deadline is at risk
+  eff_margin: 0.80
+  book_weekday_hours: 1.5
+  book_weekend_hours: 2.5
+  skip_book_when_behind: true
+  sleep_hours: 8
+  cut_sleep_when_behind: 1    # hours of sleep cut on days a deadline is at risk ("rarely cuts")
+  pet_care: meet              # meet the daily need
+  her: meet                   # 3 evenings, or 2 + weekend half-day in her crunch weeks
+  acceptance: fit             # accept offers that fit the schedule, best $/h first
+  lifeline_order: [rent_late, early_payment, borrow]
+  shop: {headphones: {min_cash: 1500}}
+  effect_pick: value          # highest expected value
+  value_weights: {money: 1.0, stress_per_point: 2.0, book_per_hour: 15.0, info: 40.0, liquidity: 60.0}
+
+book_heavy:
+  weekday_paid_hours: 4.5     # 4-5 h/weekday
+  extra_paid_hours: 2
+  weekend_paid_hours: 0
+  weekend_extra_hours: 3
+  eff_margin: 0.80
+  book_weekday_hours: 2.5
+  book_weekend_hours: 3.5
+  skip_book_when_behind: false
+  sleep_hours: 8
+  cut_sleep_when_behind: 1
+  pet_care: meet
+  her: meet
+  acceptance: fit
+  lifeline_order: [rent_late, early_payment, borrow]
+  shop: {headphones: {min_cash: 1800}}
+  effect_pick: value
+  value_weights: {money: 0.6, stress_per_point: 4.0, book_per_hour: 40.0, info: 40.0, liquidity: 60.0}
+
+grinder:
+  weekday_paid_hours: 9.5     # 9-10 h/weekday + weekends
+  extra_paid_hours: 1.5
+  weekend_paid_hours: 8           # "+ weekends": close to a full day
+  weekend_extra_hours: 1.5
+  eff_margin: 0.85
+  book_weekday_hours: 0
+  book_weekend_hours: 0
+  skip_book_when_behind: true
+  sleep_weekday_choices: [6, 7]   # cuts often: weekday sleep drawn from these
+  sleep_hours: 7                  # weekend sleep
+  cut_sleep_when_behind: 0
+  pet_care: partial               # meets the need on pet_meet_chance of days, else need - pet_short_hours
+  pet_meet_chance: 0.6
+  pet_short_hours: 1.0
+  her: some                       # one evening a week, sometimes a second, sometimes a weekend half-day
+  her_second_evening_chance: 0.5
+  her_half_day_chance: 0.5
+  acceptance: fit
+  lifeline_order: [early_payment, rent_late, borrow]
+  shop: {headphones: {min_cash: 600}, coworking: {min_cash: 1200}}
+  effect_pick: value
+  category_only: [efficiency, throughput, rate]   # efficiency/rate only; others get a tiny weight
+  value_weights: {money: 1.0, stress_per_point: 0.3, book_per_hour: 0.0, info: 0.0, liquidity: 0.0}
+
+careless:
+  weekday_paid_hours: 5.5     # 5-6 h/weekday
+  extra_paid_hours: 0
+  weekend_paid_hours: 0
+  weekend_extra_hours: 0
+  eff_margin: 0.80
+  book_chance: 0.3            # works on the book on this share of days ("occasional")
+  book_weekday_hours: 1.5
+  book_weekend_hours: 1.5
+  skip_book_when_behind: false
+  sleep_hours: 8
+  sleep_cut_chance: 0.3       # random sleep: cuts on this share of nights...
+  sleep_cut_choices: [1, 2, 3]  # ...by one of these amounts
+  cut_sleep_when_behind: 0
+  pet_care: random
+  pet_meet_chance: 0.6        # meets the need on this share of days, else half of it
+  her: random
+  her_evening_chance: 0.35
+  her_half_day_chance: 0.4
+  acceptance: poor            # accepts offers at random, ignoring the schedule
+  accept_chance: 0.7
+  lifeline_order: random
+  shop: {random_chance_per_day: 0.05, min_cash: 300}
+  effect_pick: random
+
+greedy_optimal:
+  # SEARCH-BASED and allowed to read hidden future state (the run's full offer stream).
+  # For each seed, every combination below is simulated and the run with the highest end money
+  # value is kept.
+  search_weekday_hours: [8, 10, 12]
+  search_weekend_hours: [0, 6]
+  search_sleep_hours: [8, 6]
+  eff_margin: 0.87
+  pet_care_hours: 1.0         # "ignores unless forced": only feeding / bare minimum
+  lifeline_order: [rent_late, early_payment, borrow]
+  shop: {headphones: {min_cash: 400}, coworking: {min_cash: 900}}
+  effect_pick: value
+  value_weights: {money: 1.0, stress_per_point: 0.0, book_per_hour: 0.0, info: 0.0, liquidity: 0.0}
