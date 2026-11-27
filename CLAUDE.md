@@ -78,6 +78,15 @@ Note: `STORY_CONCEPT_V2.md` mentions `GAME_DESIGN.md`, `TECH_SPEC.md` and a `CLA
 - Keep functions small and readable. The owner must be able to explain the code.
 - Docs and code comments are in English.
 
+## Git workflow
+- Never commit to `main`. Before starting a task, update main and create a new branch:
+  `git switch main && git pull && git switch -c <type>/<short-name>`
+  (types: feat, fix, docs, chore, e.g. `feat/econ-sim-core`)
+- One branch per task. Commit in small, logical steps with clear messages.
+- When the task is done: push the branch and open a pull request with `gh pr create`,
+  describing what changed and how it was tested. Link the issue if there is one ("Closes #12").
+- Don't merge pull requests yourself. Nancy reviews and merges.
+
 ## Terms used in the docs
 
 - **"The weather"**: AI as an ambient condition of the world (e.g. clients moving work to post-editing). It is not a plot driver.
