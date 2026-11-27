@@ -1,0 +1,1 @@
+"""Paws & Paychecks economy simulator."""
