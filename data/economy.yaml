@@ -1,0 +1,200 @@
+# Paws & Paychecks — economy config (v0.2 baseline)
+#
+# Single source of tunable numbers for the economy simulator (sim/) and, later, the game.
+# Values come from design/SIM_BASELINE.md unless marked "(sim choice)", which means the
+# spec left the number open and the simulator picked a simple value. Those choices are
+# listed under "Open issues" in sim/reports/SIM_REPORT.md.
+# Money is US dollars. Time is hours or days (day 1 = Monday).
+
+calendar:
+  days: 42                    # length of the run, days
+  no_new_work_from_day: 41    # days >= this accept no new paid work (wrap-up / ending)
+  week_length: 7              # days per week; week 1 = days 1-7
+
+day:
+  default_sleep_hours: 8      # hours of sleep on a default night
+  min_sleep_hours: 4          # minimum hours of sleep when cutting sleep
+  routine_hours: 2            # hours/day of morning and evening routines
+  lunch_hours: 1              # lunch break on days with paid work (not leisure)
+  default_work_hours: 8       # weekday work hours in the default day (9:00-18:00, 1 h lunch)
+  morning_work_hours: 4       # the first N work hours of a day count as "before 13:00"
+  evening_after_hours: 8      # work hours beyond this count as "after 19:00"
+  leisure_hours_cap: 4        # (sim choice) max free hours/day that count as leisure for stress relief
+  interruption_min: 0.0       # min share of planned work time lost to interruptions per day
+  interruption_max: 0.25      # max share of planned work time lost to interruptions per day
+  pet_interruption_share: 0.5 # (sim choice) share of interruptions caused by the pet
+
+work:
+  net_factor: 0.78            # share of gross pay kept after setting aside taxes
+  throughput:                 # finished words/hour, incl. research and checking
+    standard: 310
+    post_edit: 470
+  rate:                       # $/word, gross
+    standard_agency: 0.10
+    standard_direct: 0.14
+    post_edit: 0.055
+  rush_rate_multiplier: 1.25  # rush jobs pay base rate x this
+  rush_share: 0.15            # (sim choice) share of non-PE offers that are rush jobs
+  rush_deadline_factor: 0.5   # (sim choice) rush deadline = normal deadline x this (min 1 day)
+  pe_rate_all_clients: true   # (sim choice) PE pays the PE rate regardless of client type
+
+offers:
+  per_weekday_mean: 1.3       # Poisson mean of new offers per weekday
+  expire_days: 1              # offers must be accepted on the day they arrive
+  sizes:                      # words range and share of offers
+    small:  {min_words: 500,   max_words: 1500,  share: 0.50}
+    medium: {min_words: 3000,  max_words: 6000,  share: 0.35}
+    large:  {min_words: 10000, max_words: 20000, share: 0.15}
+  deadline_hours_per_day: 6   # deadline (working days) = est. hours / this x uniform(min, max)
+  deadline_factor_min: 1.1
+  deadline_factor_max: 1.8
+  deadline_min_days: 1        # minimum deadline, working days
+  pe_share_start: 0.25        # share of offers that are post-editing before the client switch
+  pe_share_end: 0.50          # share reached at pe_share_end_day
+  pe_switch_day_min: 8        # story hook: regular client switches to PE, earliest day (week 2)
+  pe_switch_day_max: 21       # latest day (end of week 3)
+  pe_share_end_day: 36        # (sim choice) day the PE share reaches pe_share_end (start of week 6)
+
+reputation:
+  late_payment_penalty: 0.20  # missed deadline: payment reduced by this share
+  penalty_days: 7             # missed deadline: that client is cool for this many days
+  offer_drop_chance: 0.5      # (sim choice) while cool, chance each offer from that client is lost
+  rate_multiplier: 0.9        # (sim choice) while cool, that client's offers pay x this
+
+clients:                      # client type: share of jobs and payment delay after delivery (days)
+  direct:         {share: 0.25, pay_days_min: 2,  pay_days_max: 3}
+  standard_agency: {share: 0.50, pay_days_min: 7,  pay_days_max: 7}
+  slow_agency:    {share: 0.25, pay_days_min: 14, pay_days_max: 14}
+  late_share: 0.20            # share of payments that arrive late
+  late_days_min: 3            # late payments arrive this many extra days late (min)
+  late_days_max: 7            # (max)
+
+story_job:                    # fixed story event: large agency job taken in week 2, paid in week 5
+  offer_day: 8                # day it is offered (Monday of week 2)
+  words: 12500                # size, words (10,000-15,000 in spec; tune)
+  client: standard_agency
+  pay_day: 33                 # (sim choice) paid on this day (week 5), or 7 days after delivery if later
+
+pre_move_receivables:         # invoices for pre-move work: day -> net amount ($)
+  - {day: 6,  amount: 600}
+  - {day: 13, amount: 900}
+  - {day: 24, amount: 500}    # originally due day 18; arrives late
+
+costs:
+  rent: 1500                  # $/month; day-1 rent is paid before the run starts
+  rent_days: [31]             # days rent falls due during the run
+  living_per_day: 48          # groceries, utilities, phone, transport, insurance, misc. ($/day)
+  pet_food_per_day: 2         # $/day
+  pet_food_growth_day: 14     # first growth stage; pet food rises after this day
+  pet_food_growth_multiplier: 1.5
+  fixed:                      # one-off fixed costs: day -> amount ($)
+    - {day: 1,  amount: 250, label: pet starter supplies}
+    - {day: 3,  amount: 150, label: vet first exam + vaccines}
+    - {day: 17, amount: 100, label: vet booster}
+    - {day: 31, amount: 100, label: vet booster}
+  transformation_day: 30      # week-5 pet transformation/illness bill
+  transformation_tiers: [300, 500, 800]   # possible bills ($)
+  # probability of each tier, by pet-care deficit days before the transformation day (sim choice)
+  transformation_tier_probs:
+    - {max_deficit_days: 0,  probs: [0.6, 0.3, 0.1]}
+    - {max_deficit_days: 3,  probs: [0.3, 0.4, 0.3]}
+    - {max_deficit_days: 999, probs: [0.1, 0.4, 0.5]}
+  random_cost_chance_per_day: 0.25        # ~1 small cost every 4 days
+  random_cost_min: 20
+  random_cost_max: 150
+  pet_damage_chance_per_deficit_day: 0.25 # (sim choice) chance of a small damage cost on a pet-care deficit day
+  illness_cost_min: 0         # cost of a stress illness day ($)
+  illness_cost_max: 80
+
+start:
+  cash: 1400                  # cash after day-1 rent ($). Chosen by the starting-cash search, see report §1
+  stress: 15                  # (sim choice) "low"
+  book_progress_min: 0.60     # share of the book already done at the start
+  book_progress_max: 0.75
+
+book:
+  words_per_hour: 150         # literary throughput
+  # remaining work is sized by hours: progress_max -> hours_min, progress_min -> hours_max (linear)
+  remaining_hours_min: 60
+  remaining_hours_max: 80
+  remaining_hours_scale: 1.0  # multiplier on remaining hours (used by the sensitivity sweep)
+  milestones: 3               # equal milestones; finishing all by the last day = book finished
+  advance_enabled: false      # variant: true = small advance paid on each milestone
+  advance_per_milestone: 400  # gross $ per milestone in the "small advance" variant (paid on reaching it)
+
+lifelines:
+  borrow_max: 800             # borrow from her: up to this much, once
+  borrow_buffer: 200          # (sim choice) borrow this much above the shortfall, within the max
+  early_payment_fee: 0.10     # ask a client to pay early: lose this share of that invoice, once
+  rent_late_fee: 75           # pay rent late once: fee ($)
+  rent_late_days: 7           # pay rent late: must be paid within this many days
+  bankrupt_floor: -300        # cash below this at the end of a day = bankrupt, even with lifelines left
+
+stress:
+  max: 100
+  per_work_hour_beyond: 6     # paid work hours above this in a day add stress
+  work_hour_over: 2           # +stress per paid hour beyond the threshold
+  sleep_cut_hour: 4           # +stress per hour of sleep cut
+  sleep_cut_efficiency: 0.05  # next-day efficiency lost per hour of sleep cut
+  short_night_hours: 7        # a night with less sleep than this is "short"
+  consecutive_short_night: 3  # +stress per consecutive short night after the first
+  deadline_tomorrow: 5        # +stress per job due tomorrow with work remaining
+  runway_days: 7              # cash below this many days of costs...
+  low_runway: 4               # ...adds this much stress per day
+  rush_in_progress: 2         # +stress per day while any rush job is in progress
+  leisure_hour: -2            # per leisure / time-with-her hour
+  book_hour: -2.5             # per book hour
+  no_paid_work_day: -6        # a day with no paid work
+  natural_recovery: -3        # every day
+  efficiency_threshold: 50    # above this, efficiency drops...
+  efficiency_per_point: 0.01  # ...by this much per point
+  illness_threshold: 85       # stress above this...
+  illness_after_days: 2       # ...for this many consecutive days...
+  illness_chance: 0.15        # ...gives this daily chance of losing a day to illness
+
+her:
+  weekday_evenings: [1, 2, 3, 4, 5]   # weekdays she is free in the evening (1 = Monday)
+  crunch_weeks: [4, 5]                # her crunch weeks
+  crunch_evenings: [2, 4]             # (sim choice) her free evenings in crunch weeks (Tue, Thu)
+  evening_hours: 2                    # an evening counts if it is at least this long
+  half_day_hours: 4                   # a weekend half-day counts if at least this long
+  evenings_needed: 3                  # need: this many evenings per week...
+  evenings_with_half_day: 2           # ...or this many evenings plus a weekend half-day
+
+pet:
+  care_hours:                 # daily care need by stage: from day -> hours/day
+    - {from_day: 1,  hours: 2.5}
+    - {from_day: 14, hours: 2.0}
+    - {from_day: 28, hours: 1.5}
+
+effects:
+  enabled: true               # false = control runs with no effects
+  offer_size: 3               # pick 1 of this many
+  weekly_reflection_days: [7, 14, 21, 28, 35]   # guaranteed offers (end of weeks 1-5)
+  work_milestone_every: 4     # an offer every Nth completed paid job
+  size_scale: 1.0             # multiplier on all effect up/downsides (sensitivity sweep)
+  late_offer_from_day: 22     # (sim choice) from this day (weeks 4-5) offers lean away from efficiency...
+  late_offer_efficiency_weight: 0.5   # ...efficiency/throughput effects are drawn with this relative weight
+  caps:                       # within-category caps on summed bonuses
+    efficiency: 0.40
+    rate: 0.25
+    stress_relief: 0.50
+  pool:
+    deep_focus:      {category: efficiency, single_bonus: 0.15, multi_penalty: 0.10}
+    context_switcher: {category: efficiency, multi_bonus: 0.12, single_penalty: 0.08}
+    morning_person:  {category: efficiency, morning_bonus: 0.15, evening_penalty: 0.10}
+    night_owl:       {category: efficiency, evening_bonus: 0.15, sleep_cut_extra_stress: 1}
+    headphones:      {category: efficiency, shop: true, interruption_reduction: 0.30, price: 120}
+    coworking:       {category: efficiency, shop: true, bonus: 0.10, pet_interruption_reduction: 0.50, price_per_week: 60, extra_pet_care_hours: 0.5}
+    cat_tool:        {category: throughput, bonus: 0.15, price_per_week: 30}
+    direct_network:  {category: rate, direct_offer_multiplier: 2.0, revision_hours: 1}
+    fast_invoicer:   {category: cash_flow, slow_pay_days: 7, fee: 0.03}
+    morning_pages:   {category: stress, daily_relief: 1, book_hour_relief: 3.5, time_hours: 0.5}
+    walk_routine:    {category: pet, pet_hour_relief: 1, skipped_walk_deficit_weight: 2}  # (sim choice) a skipped walk counts as this many deficit days
+    her_spreadsheet: {category: money, requires_evening_with_her: true}
+
+ending:                       # (sim choice) thresholds for a "good combined ending" (report only)
+  max_relationship_weeks_missed: 1
+  max_pet_deficit_days: 4
+  max_high_stress_days: 6     # days with stress > high_stress_level
+  high_stress_level: 70
