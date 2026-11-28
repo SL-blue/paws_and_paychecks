@@ -227,6 +227,11 @@ open_issues: |
      restating, or the effect sizes need raising.
   7. **Deposit terms is dead under every policy rule.** Liquidity is worth little to players who rarely run out of
      cash. Rework it, e.g. deposits on all large and medium jobs, or no offer penalty.
+  8. **Apply the recommended overlay?** `data/economy.recommended.yaml` (§10) is not merged into `economy.yaml`. It
+     meets 17 of 31 targets vs. 16, revives the neighbor and brings the Saturday class under the top-decile limit,
+     but it does not touch issues 1–6. Apply all of it, part of it, or none.
+  9. **Sunday brunch is borderline dead** (10% pick rate when offered; just under the line with the overlay). It
+     saves only 1 hour per half-day. Make it stronger, or accept it as a niche pick.
 
   ### Interpretation choices (simplest reasonable reading; review)
   **Targets and metrics**
@@ -280,12 +285,16 @@ open_issues: |
     - Sunday planning works from the day after the first Sunday after it is taken.
     - Puppy class's Saturday hours apply in weeks 2–4 whenever it is held.
     - The neighbor is used once a week on the first day the policy is behind or short on care, paid in money.
+      The spec's alternative cost (2 h of help on Sunday) is not modeled.
     - The Saturday class's 4 h count as paid hours for stress, so that Saturday loses the no-paid-work relief.
     - The nap happens when stress is above 50 at the start of the day.
     - Boundaries caps paid work at 8 h/day.
     - Rush specialist's 1.4× rush rate counts as +12% in the rate cap.
   - **`size_scale`** (sensitivity "effect sizes") scales every up/downside, not prices, time costs, hours or days.
     Extra-offer multipliers above 2× can't be represented.
+  - **Effect choices come from hand-set value weights** (`data/policies.yaml`, §6), not from real players. The CAT
+    price check, pick rates, the dead-effect list and effect counts measure those weights; treat them as a
+    balance estimate.
 
   **Tuning and sensitivity**
   - The starting-cash search, H search, CAT check and sensitivity sweep run without greedy-optimal (its 0% targets
@@ -296,3 +305,20 @@ open_issues: |
     - "Transformation-bill odds" scales the two higher tiers' odds.
     - The loan window uses 5 / 9 days instead of ±25%.
   - **Implied starting progress** assumes a 215-hour whole book (sim choice, story text only).
+
+  ### Ideas for the next version
+  **Simulator**
+  - An "imperfect careful" policy that sometimes misses an evening or a walk under crunch. This is the cheapest
+    way to test issue 1 without changing the design.
+  - Calibrate the effect value weights against playtest choices once a prototype exists, then re-run the CAT check
+    and the dead-effect list.
+  - Model the neighbor's alternative cost (2 h of help on Sunday) and let policies choose money or time.
+  - Run greedy-optimal in the cash and H searches as well, if run time allows (~4× longer).
+  - Re-run the $1,200 cash / $750 finance-bar probe at 2,000 seeds if the owner considers issue 3's first option.
+
+  **Design questions carried over from SIM_BASELINE §11 (not simulated this round)**
+  - Gentle / Hard presets (starting cash, late payments, loan window). The sensitivity row already covers a 5-day
+    loan window (Hard); a full preset run is the natural next step.
+  - How taxes are shown (net pay, a tax jar or a tax bill). The sim uses the fixed NET factor.
+  - More regular-client habits and more fixed story commissions.
+  - Narrative content of events and endings, plus currency and city (numbers scale uniformly).
