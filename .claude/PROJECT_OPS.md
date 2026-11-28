@@ -2,6 +2,18 @@
 
 > Settled 2026-11-27. The `project-scribe` subagent (`.claude/agents/project-scribe.md`) reads this file every run. Change it only when Nancy asks.
 
+## 0. Status
+
+**Status: PAUSED** (since 2026-11-27). The GitHub account the agent uses was restricted, probably for creating too many issues at once during setup.
+
+While paused:
+- `project-scribe` does nothing. The main session doesn't delegate to it and makes no board or wiki calls itself.
+- The board (project #2) and the wiki stay frozen as of 2026-11-27. Nancy can still update the board by hand with her own account.
+- Progress and new to-dos go in **`PROGRESS.md`** in the repo root, maintained by the main session (see `CLAUDE.md` → "Progress tracking").
+- At the end of a task, the main session pushes the branch and gives Nancy a **ready-made PR link**. It doesn't open the PR itself.
+
+To resume: change the status line above to `Status: ACTIVE`, restore `CLAUDE.md`'s "Board and wiki" section (the git history has the old version), then run the scribe once with `MODE: catch-up` and the pause date. The rate limits in the agent file apply from then on.
+
 ## 1. Who owns what
 
 | Place | Role | Source of truth for | Who edits |
