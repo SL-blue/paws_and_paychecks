@@ -1,0 +1,49 @@
+# Recommended tuning changes, round 2 (overlay on the tuned data/economy.yaml), from sim/reports/SIM_REPORT.md §10.
+# NOT applied to economy.yaml: pending owner review. `python -m sim.run --all` (or --recommended) re-runs the
+# whole matrix with `changes` merged on top of the tuned config.
+# Deliberately NOT here: the finance-good bar (1,500, an owner decision of 2026-11-27) and the ending targets.
+# Changing those is an owner decision; the report (§11) gives the numbers.
+
+changes:
+  start:
+    cash: 2000                 # was 1900 (search result)
+  lifelines:
+    parents_floor: -100        # was -300
+    borrow_max: 400            # was 800
+  effects:
+    work_milestone_every: 12   # was 8
+    pool:
+      side_class: {saturday_income: 60}       # was 100
+      neighbor_sitter: {price_per_use: 0}     # was 25 per use
+
+rationale:
+  - key: start.cash
+    from: 1900
+    to: 2000
+    why: "The two effect changes below (Saturday class, fewer milestone offers) lower book-heavy's end money, and with it the best ending (55% -> ~40% at 1,900)."
+    expected: "Book-heavy best back to ~50% (target 45-55%); careless parents' ending ~18% instead of ~22%."
+  - key: lifelines.parents_floor
+    from: -300
+    to: -100
+    why: "Once her loan is used, a careless player can sit between -300 and 0 for many days without consequence; careless reaches the parents' ending in only ~6% of runs (target >= 60%)."
+    expected: "Careless parents' ending rises to ~20% at the tuned starting cash (~60-70% at a starting cash of 1,100-1,200). Careful and grinder stay at ~0%."
+  - key: lifelines.borrow_max
+    from: 800
+    to: 400
+    why: "An 800 loan covers almost any shortfall, so the loan rarely leads anywhere. A smaller loan keeps it a real but limited rescue."
+    expected: "Together with the floor: more careless and some book-heavy runs end with the parents; careful unaffected (it almost never borrows)."
+  - key: effects.work_milestone_every
+    from: 8
+    to: 12
+    why: "Careful holds ~10.5 effects at the end (target 7-9); about 2.4 of its ~10 picks come from work milestones."
+    expected: "Careful ~9.6 effects, grinder ~12. Still above 9: the rest needs a design decision (fewer weekly offers or a 'skip' choice)."
+  - key: effects.pool.side_class.saturday_income
+    from: 100
+    to: 60
+    why: "+$100 net for 4 hours (~$25/h) pays better than translation (~$24/h net) with no deadline; careful picks it ~96% of the time when offered and it is the most common effect in careful's top decile (86%, limit 70%)."
+    expected: "Pick rate ~76%; still attractive but no longer near-automatic."
+  - key: effects.pool.neighbor_sitter.price_per_use
+    from: 25
+    to: 0
+    why: "Dead effect (picked ~3% when offered): $25 for one day of care a week is worth little to players who already meet the pet's needs. The spec's alternative cost (2 h of help on Sunday) is not modeled."
+    expected: "Careful picks it ~40% of the time when offered."

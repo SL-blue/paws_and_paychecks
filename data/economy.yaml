@@ -151,12 +151,12 @@ costs:
   illness_cost_max: 80
 
 start:
-  cash: 1400                  # cash after day-1 rent ($). Re-searched in round 2, see report §1
+  cash: 1900                  # cash after day-1 rent ($). Starting-cash search result (round 2), see report §1
   stress: 15                  # (sim choice) "low"
 
 book:
   words_per_hour: 150         # literary throughput
-  remaining_hours: 70         # H: hours of book work left at the start (tuned, see report §1)
+  remaining_hours: 67.5       # H: hours of book work left at the start (spec start 70; tuned, see report §1)
   remaining_hours_variation: 0.05   # remaining work varies +-this share per run (uniform)
   total_hours_reference: 215  # (sim choice) whole-book size in hours, only to state the implied starting progress
   milestones: 3               # equal milestones; finishing all by day 42 = book finished
@@ -253,7 +253,7 @@ effects:
     coworking:        {category: efficiency, shop: true, bonus: 0.06, pet_interruption_reduction: 0.50, price_per_week: 60, extra_pet_care_hours: 0.5}
     headphones:       {category: efficiency, shop: true, interruption_reduction: 0.30, price: 120}
     # throughput
-    cat_tool:         {category: throughput, bonus: 0.10, price_per_week: 60}
+    cat_tool:         {category: throughput, bonus: 0.10, price_per_week: 55}   # spec 60; tuned to the pick-rate target
     second_monitor:   {category: throughput, shop: true, bonus: 0.05, price: 180}
     termbase:         {category: throughput, bonus: 0.08, first_job_extra_hours: 2}
     pe_veteran:       {category: throughput, book_speed: true, pe_bonus: 0.15, standard_efficiency_penalty: 0.04, book_penalty: 0.05}
