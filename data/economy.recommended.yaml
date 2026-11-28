@@ -1,0 +1,29 @@
+# Recommended tuning changes, round 3 (overlay on the tuned config), from sim/reports/SIM_REPORT.md §11.
+# NOT applied to economy.yaml: pending owner review. `python -m sim.run --all` (or --recommended) re-runs the
+# whole matrix with `changes` merged on top of the tuned config.
+# Deliberately NOT here: the stress structure (S reliefs, convergence-week workload) and the ending targets.
+# Those need owner decisions; the report's Open issues give the numbers.
+
+changes:
+  effects:
+    skip_long_relief: 5               # was 3
+    pool:
+      specialist_niche: {standard_rate_bonus: 0.12}   # was 0.15
+      puppy_class: {price: 60}                        # was 120
+
+rationale:
+  - key: effects.skip_long_relief
+    from: 3
+    to: 5
+    why: "Imperfect careful holds 9.4 effects at the end (target 7-9); it skips 12% of offers. A larger skip reward makes skipping a real choice more often."
+    expected: "Imperfect careful ~8.8 effects; skip rate up by a few points; effect boost stays in band."
+  - key: effects.pool.specialist_niche.standard_rate_bonus
+    from: 0.15
+    to: 0.12
+    why: "Specialist niche is picked ~93% of the time by both careful policies and is in 74% of ideal careful's top decile (limit 70%)."
+    expected: "Below the 70% top-decile limit. Book-heavy's end money falls a little, which moves its parents-or-poor share into the 15-30% band (best stays in band)."
+  - key: effects.pool.puppy_class.price
+    from: 120
+    to: 60
+    why: "No value-based policy buys it: 0.5 h/day less care from day 14 is worth less than $120 plus 6 Saturday hours to every policy's value estimate."
+    expected: "Book-heavy buys it (it values free hours most); no longer flagged as an unsold shop item."

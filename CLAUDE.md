@@ -69,9 +69,9 @@ Note: `STORY_CONCEPT_V2.md` mentions `GAME_DESIGN.md`, `TECH_SPEC.md` and a `CLA
 (Fill in once scaffolded.)
 - Install: `pip install -r sim/requirements.txt`
 - Tests: `pytest sim/tests`
-- Full run + report: `python -m sim.run --all` (~12 min on 10 cores, incl. the recommended overlay; raw results go to `sim/reports/raw/`, gitignored)
+- Full run + report: `python -m sim.run --all` (~37 min on 10 cores, incl. the stress search and the recommended overlay; raw results go to `sim/reports/raw/`, gitignored)
 - Rebuild the report from saved results: `python -m sim.run --report`
-- Re-run only the recommended overlay (`data/economy.recommended.yaml`) on saved results: `python -m sim.run --recommended`
+- Re-run only the recommended overlay (`data/economy.recommended.yaml`) on saved results: `python -m sim.run --recommended` (~2 min)
 
 ## Logging
 

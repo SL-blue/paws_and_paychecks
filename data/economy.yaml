@@ -1,9 +1,9 @@
 # Paws & Paychecks — economy config (spec v0.4)
 #
 # Single source of tunable numbers for the economy simulator (sim/) and, later, the game.
-# Values come from design/SIM_BASELINE.md (v0.4) unless marked "(sim choice)", which means the
-# spec left the number open and the simulator picked a simple value. Those choices are
-# listed under "Open issues" in sim/reports/SIM_REPORT.md.
+# Values come from design/SIM_BASELINE.md (v0.4); "tuned" marks values the round-3 searches moved (spec value given).
+# Values marked "(sim choice)" are numbers the spec left open; the simulator picked a simple value. Those choices
+# are listed under "Open issues" in sim/reports/SIM_REPORT.md.
 # Money is US dollars. Time is hours or days (day 1 = Monday).
 
 calendar:
@@ -151,13 +151,13 @@ costs:
   illness_cost_max: 80
 
 start:
-  cash: 1900                  # cash after day-1 rent ($). Re-searched each round, see report §1
+  cash: 1500                  # cash after day-1 rent ($). Starting-cash search result (round 3), see report §1
   stress_short: 5             # short-term stress S at the start (the move has just happened)
-  stress_long: 10             # long-term stress L at the start
+  stress_long: 25             # long-term stress L at the start [tuned round 3; spec 10]
 
 book:
   words_per_hour: 150         # literary throughput
-  remaining_hours: 67.5       # H: hours of book work left at the start (spec start 70; tuned, see report §1)
+  remaining_hours: 62.5       # H: hours of book work left at the start (tuned round 3, was 67.5; see report §1)
   remaining_hours_variation: 0.05   # remaining work varies +-this share per run (uniform)
   total_hours_reference: 215  # (sim choice) whole-book size in hours, only to state the implied starting progress
   milestones: 3               # equal milestones; finishing all by day 42 = book finished
@@ -187,8 +187,8 @@ stress:                       # spec §7 (v0.4): two layers. Total T = min(max, 
     borrow_once: 10           # +S once when borrowing from her (the sting of asking)
     bad_interruption: 2       # +S for a bad interruption
     bad_interruption_chance: 0.25  # (sim choice) chance per workday that one of the day's interruptions is bad
-    sleep_recovery_full: 0.30 # each night: S falls by this share with a full night (>= default_sleep_hours)...
-    sleep_recovery_short: 0.15  # ...and by this share with less sleep (tune)
+    sleep_recovery_full: 0.4 # each night: S falls by this share with a full night (>= default_sleep_hours)... [tuned round 3; spec 0.30]
+    sleep_recovery_short: 0.1  # ...and by this share with less sleep (tune) [tuned round 3; spec 0.15]
     leisure_first_hours: 2    # the first N leisure hours of a day relieve...
     leisure_first_hour: -2    # ...this much per hour...
     leisure_later_hour: -1    # ...later leisure hours this much (up to day.leisure_hours_cap)
@@ -197,30 +197,30 @@ stress:                       # spec §7 (v0.4): two layers. Total T = min(max, 
     no_paid_work_day: -6      # a day with no paid work
   long:                       # long-term stress L: the situation (Δ L)
     runway_low_days: 14       # cash below this many days of costs...
-    runway_low: 1             # ...+L per day
+    runway_low: 2             # ...+L per day [tuned round 3; spec 1]
     runway_very_low_days: 7   # cash below this many days of costs...
-    runway_very_low: 2        # ...+L per day (instead of runway_low)
+    runway_very_low: 3        # ...+L per day (instead of runway_low) [tuned round 3; spec 2]
     rent_window_days: 5       # rent due within this many days and cash below the rent...
-    rent_due: 2               # ...+L per day
+    rent_due: 6               # ...+L per day [tuned round 3; spec 2]
     loan_open: 2              # +L per day while her loan is open
     her_week_missed: 6        # +L once for a week with her needs not met
-    her_crunch_day: 1         # +L per day in her crunch weeks
+    her_crunch_day: 4         # +L per day in her crunch weeks [tuned round 3; spec 1]
     pet_deficit_day: 1        # +L per pet-care deficit day
     pet_event_start: 8        # +L when the week-5 illness/transformation starts...
     pet_bill_paid: -4         # ...and this when its bill is paid
     pe_switch: 5              # +L once when client A switches to post-editing ("the weather")
     payment_late: 3           # +L once when a payment doesn't arrive on its expected day
-    payment_arrives: -2       # per payment that arrives...
+    payment_arrives: -0.5     # per payment that arrives... [tuned round 3; spec -2]
     payment_relief_max: 4     # ...at most this much relief per day
     rent_paid: -5             # rent paid
     loan_repaid: -10          # her loan repaid in full
     her_good_week: -3         # at the end of a week with her needs met
-    book_milestone: -8        # per book milestone
+    book_milestone: -10       # per book milestone [tuned round 3; spec -8]
     calm_day: -1              # on a day ending with S below calm_day_below...
     calm_day_below: 40
   conversion:                 # spec §7.4: S turning into L (tune)
-    threshold: 60             # at the end of a day, if S > this...
-    share: 0.25               # ...this share of the excess moves from S to L
+    threshold: 40             # at the end of a day, if S > this... [tuned round 3; spec 60]
+    share: 0.5               # ...this share of the excess moves from S to L [tuned round 3; spec 0.25]
     sustained_level: 45       # if S > this...
     sustained_days: 3         # ...for this many days in a row, from the last of them...
     sustained_per_day: 2      # ...L gains this much per day

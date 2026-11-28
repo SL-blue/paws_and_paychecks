@@ -213,7 +213,8 @@ def test_long_term_stress_drivers(cfg):
     assert stress.long_delta(cfg, ld(rent_due_soon_short=True, loan_open=True, crunch_week=True, pet_deficit=2)) == \
         pytest.approx(lg["rent_due"] + lg["loan_open"] + lg["her_crunch_day"] + 2 * lg["pet_deficit_day"])
     # payments relieve L, at most payment_relief_max per day; other events add up
-    events = [("payment", lg["payment_arrives"])] * 5 + [("rent_paid", lg["rent_paid"])]
+    many = int(lg["payment_relief_max"] / -lg["payment_arrives"]) + 2
+    events = [("payment", lg["payment_arrives"])] * many + [("rent_paid", lg["rent_paid"])]
     assert stress.long_delta(cfg, ld(events=events)) == pytest.approx(-lg["payment_relief_max"] + lg["rent_paid"])
     assert stress.long_delta(cfg, ld(extra_relief=0.5)) == -0.5
 
@@ -228,10 +229,11 @@ def test_conversion_too_much_and_too_long(cfg):
     stress.convert(cfg, lv)
     assert lv.short == pytest.approx(c["threshold"] + 20 * (1 - c["share"]))
     assert lv.long == pytest.approx(10 + 20 * c["share"]) and lv.conversions == 1
+    no_excess = with_overrides(cfg, {"stress.conversion.threshold": 100})   # only the "too long" rule
     lv = levels(cfg, short=c["sustained_level"] + 1, long=0)
     for day in range(1, c["sustained_days"] + 2):
         before = lv.long
-        stress.convert(cfg, lv)
+        stress.convert(no_excess, lv)
         gained = lv.long - before
         assert gained == pytest.approx(c["sustained_per_day"] if day >= c["sustained_days"] else 0.0)
 
@@ -250,6 +252,7 @@ def test_day_and_night_order(cfg):
 
 
 def test_no_calm_day_recovery_when_short_term_stress_is_high(cfg):
+    cfg = with_overrides(cfg, {"stress.conversion.threshold": 100})       # keep conversion out of it
     lg = cfg["stress"]["long"]
     lv = levels(cfg, short=lg["calm_day_below"] + 5, long=20)
     stress.end_of_day(cfg, lv, stress.ShortDay(paid_hours=6), stress.LongDay())

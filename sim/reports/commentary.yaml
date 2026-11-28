@@ -1,0 +1,238 @@
+# Written commentary for SIM_REPORT.md (round 3, spec v0.4), merged in by sim/src/report.py.
+# Tables come from the data; numbers quoted here are from the committed 2,000-seed run.
+intro: |
+  This report covers round 3 of the economy simulation, specified in `design/SIM_BASELINE.md` §10 (v0.4).
+  - **What ran:** six policies (new: imperfect careful; careful is now "ideal careful") × {with effects, no effects}
+    × {story job declinable, always taken}; the stress, starting-cash, H and CAT-price searches; a sensitivity sweep
+    (30 rows); and a re-run with recommended config changes.
+  - **What's new in v0.4:** two-layer stress (S and L, with conversion), money tiers with "poor", the $400 loan and
+    −$100 parents' floor, the skip choice, value-based shop buys, the changed effects, the 9,000-word story job.
+  - **Where things live:** economy numbers in `data/economy.yaml`, player behaviour in `data/policies.yaml`,
+    the recommended overlay in `data/economy.recommended.yaml`. Interpretation choices are in §12.
+
+  **Headlines**
+  - **Tuned values:** starting cash **$1,500**, **H = 62.5 h**, CAT tool **$55/week** (unchanged). The stress search
+    moved most stress numbers a long way from the spec (§1). The main variant meets **23 of 39** targets; with the
+    recommended overlay, **25 of 39**.
+  - **Money now works as designed.** The lower finance bar, the $400 loan and the −$100 floor removed round 2's
+    money conflict. At $1,500:
+    - book-heavy's best ending is 53% (target 45–55%);
+    - careless ends with the parents or in debt in 75% (≥ 60%);
+    - book-heavy reaches the parents' ending or poor finances in 14% (15–30%; 18% with the overlay).
+  - **Stress doesn't bite careful players.** Their short-term stress S stays at 0 almost every day: a careful day has
+    almost no S drivers (6.5 planned hours, jobs that fit, a full night), and rest, her and the book outweigh them.
+    So their total stress is long-term stress only, and only 3 of 8 stress targets are met:
+    - imperfect careful's average T is 17 (target 25–40) and its median week-5 peak is 30 (55–75);
+    - it misses the stress goal in 5% of runs (10–15%).
+    Pushing L up to reach the averages and the peak makes L linger past day 42, and the stress-goal misses jump to
+    20–60%. No tuning of the listed parameters meets both (§3, §12 issue 1).
+  - **So imperfect careful's endings are too good:** best 49% (target 25–35%), good or better 90% (70–80%). Its slips
+    (0.8 skipped evenings, 1.2 short pet-care days, 0.8 unfit jobs per run) rarely cost a goal. Best tracks its
+    book-finish rate one for one (§1, step 3).
+  - **Effects mostly in band:** imperfect careful holds 9.4 effects (7–9; 8.8 with the overlay), effect boost +10% /
+    +14% (in band), CAT pick 47% (in band). Five offered effects are dead, including the nap habit (S never passes 50).
+  - **Feedback** is 76% for imperfect careful (target 80%), lower for book-heavy (54%) and the grinder (63%).
+  - **The grinder now pays for overwork in money too.** The tuned conversion pins its stress at 100 from about day 10
+    (efficiency −50%, 4.5 illness days); its median end value fell from $6,062 to $1,314. That ends round 2's
+    "neglect pays most", but a stress of 100 for 30 days is extreme (§12 issue 3).
+
+toc: |
+  Sections: 1 Tuning · 2 Endings and money tiers · 3 Stress · 4 Money, stress, time · 5 Acceptance targets ·
+  6 Cash charts · 7 Effects · 8 Clients, story job, slips · 9 Sensitivity · 10 Comparison with round 2 ·
+  11 Recommended changes and re-run · 12 Open issues
+
+tuning_stress: |
+  **Reading the stress search**
+  - **It is a trade-off, not a fit.** Most chosen values are at or near the edge of their grids: crunch load 4/day
+    (spec 1), rent load 6 (spec 2), conversion threshold 40 (spec 60), starting L 25 (spec 10). Each step that raises
+    careful's average T also raises its stress-goal misses. The search settles where the summed distance is smallest
+    (5 of 8 met at $1,200).
+  - **The provisional cash matters.** The search ran at $1,200, as the spec's order requires (stress before cash).
+    The cash search then chose $1,500. More cash means less runway and rent stress, so at the final config only
+    3 of 8 are met (careful's averages drop by ~4 points).
+  - **A first trial that ranked "most targets met" first** (as the cash search does) reached 6 of 8, but with
+    imperfect careful missing the stress goal in 66% of runs and ideal careful in 50%. Distance-first is the more
+    honest compromise (`DECISIONS.md`).
+
+tuning: |
+  **Reading the other searches**
+  - **Starting cash.** $1,500 meets 11 of 14 scored rows with the least distance. Lower cash puts book-heavy's
+    parents-or-poor rate in band (≥ 15% below $1,500) but drops its best ending below 45% (44% at $1,400). The
+    grinder's parents' ending crosses 5% below $1,600.
+  - **H.** Imperfect careful's best ending equals its book-finish rate almost exactly at every H (88/84% at 50 h,
+    50/49% at 62.5 h, 27/27% at 67.5 h), and good or better stays at ~90%. So H can put the book-finish row in band
+    or the best row, not both: best 25–35% with finishing 40–50% needs a third of the finishers to miss another
+    goal. That is the stress issue again.
+  - **CAT tool.** $55 gives a 47% pick rate (target 40–60%); no change.
+
+endings: |
+  **Reading the tables**
+  - **Imperfect careful** misses mostly the book (50%). It loses the pet goal in 6% of runs, her in 2%, stress in 5%.
+    That gives good or better 90% (target 70–80%).
+  - **Ideal careful** is the upper bound: best 72%, good or better 98%, parents' ending 0%.
+  - **Book-heavy** finishes the book in every run and never gets a "good" ending (as targeted). Its best ending
+    (53%) is decided by money and, newly, stress: it misses the stress goal in 32% of runs, mostly through L above
+    40 on day 42 when money is tight.
+  - **Poor finances** (debt on day 42) appear as intended: 11% of book-heavy runs, 18% of careless. Almost every
+    loan is taken after day 35 (late crises around the deferred rent), which is why the parents' ending via an
+    overdue loan stays near 0% and the floor does the work (careless: 56% via the floor).
+  - **Story job always taken:** imperfect careful's best falls 49% → 44% (less book time); book-heavy's best rises to
+    55% (just outside its band).
+
+stress: |
+  **Reading the stress results**
+  - **S is flat at 0 for careful and book-heavy** (chart, top row). On a careful weekday the S drivers add about +1
+    (0.5 h over 6), while her time, the book and leisure remove 6–8. Halving every S relief in a probe (not part of
+    the committed run) moved imperfect careful's average T only from 17 to 20 and its peak not at all. The missing
+    piece is *pressure*: careful rarely falls behind, so deadlines, extra hours and cut sleep almost never fire.
+  - **L carries everything.** For careful it starts at 25, falls through weeks 2–3 (payments, good weeks, calm days),
+    rises in weeks 4–5 (her crunch, rent due with cash below the rent, the pet's illness), and falls again after the
+    rent and the story job are paid.
+  - **Grinder:** S sits around 60–80; with the tuned conversion (threshold 40, half the excess moves to L) L reaches
+    100 by day ~12 and stays there. Careless reaches L 100 in week 5 through missed weeks, pet deficits and money.
+  - **Conversion never happens for careful players** (0 conversion days), so the "a crunch leaves a mark" rule
+    only touches the grinder in practice.
+
+summary: |
+  **Notes**
+  - **Effects still matter:** with effects off, imperfect careful's median end value falls from $2,716 to $2,222,
+    its book milestones from 2.46 to 2.13, and its best ending from 49% to 25%.
+  - **Crises are common but small for careful players** (21% of runs hit cash < 0 once, usually the day-31 rent),
+    resolved by paying rent late or an early payment; they almost never borrow.
+
+feedback: |
+  - **Weeks 2–4 are still the gap** for careful players: the story job (now 9,000 words) still fills week 2–3 and
+    pays on day 33. The smaller job raised imperfect careful from 73% to 76%, short of 80%. The spec accepts this
+    squeeze as intended (`DECISIONS.md`), so the target and the design disagree slightly (§12).
+  - **Book-heavy (54%) and the grinder (63%) are further off.** Book-heavy works fewer paid hours. The grinder's
+    stress of 100 halves its efficiency, so it finishes fewer jobs and has weeks without a payment.
+
+targets: |
+  The ending rows that miss are imperfect careful's best and good-or-better (the stress issue) and the grinder's
+  parents' ending (6% vs ≤ 5%). "Always taken" changes little.
+
+effects_method: |
+  **How the policies pick effects.** Value-based policies rate each offered effect with a short analytic estimate
+  (`sim/src/effect_value.py`) in money, stress points (S and L alike), book hours, free hours and risk, weighted by
+  hand-set weights in `data/policies.yaml`. **New in v0.4:** a policy skips an offer when no effect beats the skip
+  reward (3 L × its stress weight), and buys a shop item when its estimated value exceeds its price over the rest of
+  the run, keeping a 14-day cash reserve (7 for the grinder and greedy-optimal). Careless picks at random and never
+  skips. **Pick, skip and buy rates measure these heuristics, not real players.**
+
+effects: |
+  **Reading the tables**
+  - **Skip** is used: 12% of imperfect careful's offers (20% of book-milestone offers, when the pool left is mostly
+    work effects it doesn't need), 23% for book-heavy, 47% for the grinder (it values only work effects).
+  - **Effect count:** imperfect careful 9.4 (target 7–9). Fewer work-milestone offers (every 12th job) and skips
+    took it from round 2's 10.5; the overlay's larger skip reward brings it to 8.8.
+  - **Top decile:** specialist niche is in 74% of ideal careful's top decile (limit 70%). The overlay's 0.12 rate bonus
+    fixes it; the Saturday class then sits just over the line (70.5%).
+  - **Dead effects** (each needs a design look; §12):
+    - nap habit: never triggers, S never passes 50 for careful players;
+    - Sunday brunch: no value-based policy picks it (it saves 2 h per crunch-week half-day, worth less than $25 to them);
+    - the neighbor: now costs 2 h on Sunday, which cancels most of the day's care it saves;
+    - deposit terms and invoice reminders (8–10%): liquidity is worth little to players who rarely run out of cash.
+  - **Shop:** headphones (all value-based policies), second monitor (careful players 83%, grinder), coworking and
+    sturdy toys (grinder) sell. Puppy class sells only at $60 (overlay; bought by book-heavy). **Standing desk never sells**: careful players
+    rarely work more than 6 paid hours, and the grinder's value weights stress at 0.3.
+
+clients: |
+  - **Story job:** imperfect careful takes it in 91% of declinable runs (target ≥ 70%).
+  - **Slips:** 0.79 skipped evenings, 1.16 short pet-care days and 0.80 unfit jobs per run. The pressure trigger
+    (T > 55 or behind) fires rarely because T stays low, so slips stay rare. Most skipped evenings are made up by the
+    Saturday half-day.
+
+sensitivity: |
+  **What moves the endings**
+  - **H** decides imperfect careful's book and best ending (86% → 0% best over ±25%).
+  - **Starting cash and rent** decide book-heavy's best ending (18–84%) and careless's parents-or-poor rate (51–91%).
+    They are also the strongest stress levers for careful players: +25% rent raises imperfect careful's stress-goal
+    misses from 5% to 14%. Money is the main source of careful's L.
+  - **Her crunch load** is the strongest stress-only lever (imperfect careful misses 2% → 15%, book-heavy best
+    59% → 38%).
+
+  **What barely matters:** the sleep-recovery shares, the conversion numbers, the sustained-S days and the skip
+  reward move careful players by ≤ 2 points: S rarely leaves 0 for them. The loan window, loan cap and parents' floor
+  matter only for careless.
+
+round2: |
+  **What changed and why**
+  - **Careless's parents' ending 6% → 57%** (75% with poor finances): the $400 loan and the −$100 floor.
+  - **Book-heavy's best ending stays ~53%** at $400 less starting cash, thanks to the $750 finance bar.
+  - **Stress is no longer near 0**, but for careful players it only comes from L (average 15–17).
+  - **Grinder and greedy-optimal** lose most of their money lead (median end value $6,062 → $1,314 and
+    $5,533 → $3,469): high stress now costs efficiency and illness days.
+  - **Effects:** fewer held (10.5 → 9.4), a slightly larger boost (+8% → +10%; smaller story job, more paid jobs).
+
+recommended_intro: |
+  Only effect numbers change. Nothing here touches the stress structure or the ending targets: those need owner
+  decisions (§12).
+
+recommended: |
+  **Result:** 25 of 39 met (23 without).
+  - **Now met:** imperfect careful's effect count (8.8), book-heavy's parents-or-poor rate (18%; its best stays in
+    band at 47%), puppy class sold (book-heavy buys it).
+  - **Not fixed:** the top-decile row (Saturday class 70.5% for ideal careful, just over the line), the dead effects,
+    the standing desk, and the stress and feedback rows.
+
+open_issues: |
+  ### Needs an owner decision
+  1. **Careful players have no short-term stress, so the stress targets conflict.** S stays at 0: a careful day has
+     almost no S drivers, because careful plans 6.5 h and accepts only jobs that fit. Halving all S reliefs barely
+     helps (§3). Raising L instead pushes the average and peak up, but then L stays above 40 on day 42 and the
+     stress-goal misses jump far above 10–15%. Options:
+     - **put real pressure into the convergence week:** e.g. a fixed week-5 job or deadline (client C's commission,
+       a revision of the story job) that even a careful schedule can't absorb in planned hours;
+     - make S drivers apply to careful players' days too: e.g. her crunch evenings or the pet's illness as S, not
+       only L;
+     - restate the targets around L (e.g. imperfect careful's average T 15–25, peak 30–45).
+     This also decides imperfect careful's endings (best 49% vs 25–35%, good or better 90% vs 70–80%). Its slips
+     only trigger above T 55, which it rarely reaches.
+  2. **The tuned stress numbers are far from the spec's** (crunch ×4, rent ×3, starting L 25, conversion at 40 moving
+     half the excess). They are the best compromise for targets that conflict (issue 1), not a calibration. Keep them,
+     or go back to the spec values after issue 1 is decided?
+  3. **The grinder sits at T = 100 from about day 10.** With the tuned conversion, any overwork goes straight into L
+     and stays. Overwork now costs money (round 2's "neglect pays" is gone), but a plateau at 100 is extreme.
+     A cap on L from conversion, or a slower conversion, would keep the grinder stressed but not maxed.
+  4. **Feedback target vs. the intended squeeze.** The 9,000-word story job lifted imperfect careful only to 76%
+     (target 80%). `DECISIONS.md` accepts the weeks 2–4 gap as intended, so the target may need restating.
+  5. **Dead effects:** nap habit (tied to S, see issue 1), Sunday brunch, the neighbor (its 2-hour Sunday cost now
+     cancels its benefit), deposit terms and invoice reminders. Standing desk never sells. Rework, or accept as niche.
+  6. **Apply the recommended overlay?** Skip reward 5, specialist niche +12%, puppy class $60 (§11).
+
+  ### Interpretation choices (simplest reasonable reading; review)
+  **Stress**
+  - **Order of a day:** S drivers, then L drivers and the day's L events, then conversion, then calm-day recovery;
+    the day's T is recorded; then sleep lowers S. Efficiency and illness use the morning T.
+  - **Sleep recovery:** the full share needs ≥ 8 h of sleep; any shorter night gets the short-night share.
+  - **Leisure** is free time only (her time has its own −2/h), counted up to 4 h/day.
+  - **Bad interruption:** a 25% chance per day with paid work (one roll per day).
+  - **Runway** = cash at the end of the day ÷ that day's living costs and pet food (rent not included).
+  - **Rent due within 5 days** = days 26–30 for the day-31 rent, and deferred rent within 5 days of its due date.
+  - **"A payment arrives"** counts job invoices and pre-move invoices, not deposits, Saturday-class income or an
+    early payment. **"Late"** = an invoice that hasn't arrived on its expected day (noticed once).
+  - **Rent paid −5 L** is withdrawn if the rent is deferred the same night.
+  - **Pet illness:** +8 L when it starts and −4 when the bill is paid, both on day 30 (the bill is always paid that day).
+  - **Stress search** ran at a provisional $1,200 (§5's probe value), before the cash search, as §10.3 orders. It
+    also searched the starting L (§5 marks it "tune") and the calm-day recovery (read as an L relief size).
+
+  **Money**
+  - "Poor" = a loan or deferred rent still open on day 42. Money tiers on a parents' run are "parents".
+
+  **Policies and effects**
+  - **Imperfect careful:** "a deadline at risk" = it needs more than its planned hours today. Only weekday evenings
+    count as "planned evenings" (not the Saturday half-day). The unfit job is the best-paying offer that failed the
+    check, once in a slip week.
+  - **Skip value** = skip reward × the policy's stress weight (S and L points valued alike). Careless never skips.
+  - **Shop:** value-based policies buy when value > price × money weight, keeping 14 days of costs (grinder and
+    greedy-optimal: 7) in cash. No day limit.
+  - **Deposit terms** apply to all medium and large jobs, including the story job (9,000 words counts as medium).
+  - **The neighbor:** used at most once a week, on a day the policy is behind or short on care; the 2 hours are taken
+    from the next Sunday.
+  - **The top-decile check** counts offered effects only; shop items are reported separately.
+  - Round-2 choices not listed here are unchanged (`SIM_REPORT_round2.md` §11).
+
+  ### Ideas for the next version
+  - Re-run the stress search at the final starting cash (or alternate the stress and cash searches until stable).
+  - Model a convergence-week job for careful players and measure its S (issue 1).
+  - Calibrate the value weights against playtest choices once a prototype exists.

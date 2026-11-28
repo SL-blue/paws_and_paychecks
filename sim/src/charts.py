@@ -1,4 +1,5 @@
-"""Report charts (matplotlib, PNG): cash over time and the lowest-cash day, per policy.
+"""Report charts (matplotlib, PNG): cash over time, the lowest-cash day, and stress (S, L, T) over
+time, per policy.
 
 Small multiples, one policy per panel, one hue: identity comes from the panel title, not color.
 Runs that end early (the parents' ending) drop out of the percentiles from their last day on.
@@ -11,7 +12,7 @@ import numpy as np  # noqa: E402
 
 BLUE, BAND = "#257de0", "#b6d5f8"
 TEXT, MUTED, GRID = "#191919", "#666666", "#e6e6e6"
-LABELS = {"careful": "Careful", "book_heavy": "Book-heavy", "grinder": "Grinder",
+LABELS = {"imperfect_careful": "Imperfect careful", "careful": "Ideal careful", "book_heavy": "Book-heavy", "grinder": "Grinder",
           "careless": "Careless", "greedy_optimal": "Greedy-optimal (search, sees future offers)"}
 
 
@@ -25,23 +26,28 @@ def _style(ax):
     ax.set_axisbelow(True)
 
 
+def _band_plot(ax, runs, key):
+    """Median line and 10th-90th percentile band of a per-day series over runs."""
+    length = max(len(r[key]) for r in runs)
+    series = np.full((len(runs), length), np.nan)
+    for i, r in enumerate(runs):
+        series[i, :len(r[key])] = r[key]
+    days = np.arange(1, length + 1)
+    p10, p50, p90 = (np.nanpercentile(series, q, axis=0) for q in (10, 50, 90))
+    ax.fill_between(days, p10, p90, color=BAND, linewidth=0, label="10th-90th percentile")
+    ax.plot(days, p50, color=BLUE, linewidth=2, label="median")
+    ax.axvspan(29, 35, color="#f2f2f2", zorder=0)
+    ax.set_xticks([1, 8, 15, 22, 29, 36, 42])
+    _style(ax)
+
+
 def cash_over_time(runs_by_policy, path, title):
     fig, axes = plt.subplots(1, len(runs_by_policy), figsize=(3.2 * len(runs_by_policy), 3.0), sharey=True)
     for ax, (policy, runs) in zip(axes, runs_by_policy.items()):
-        length = max(len(r["cash_series"]) for r in runs)
-        series = np.full((len(runs), length), np.nan)
-        for i, r in enumerate(runs):
-            series[i, :len(r["cash_series"])] = r["cash_series"]
-        days = np.arange(1, length + 1)
-        p10, p50, p90 = (np.nanpercentile(series, q, axis=0) for q in (10, 50, 90))
-        ax.fill_between(days, p10, p90, color=BAND, linewidth=0, label="10th-90th percentile")
-        ax.plot(days, p50, color=BLUE, linewidth=2, label="median")
+        _band_plot(ax, runs, "cash_series")
         ax.axhline(0, color=MUTED, linewidth=0.8)
-        ax.axvspan(29, 35, color="#f2f2f2", zorder=0)
         ax.set_title(LABELS[policy], fontsize=9, color=TEXT, loc="left")
-        ax.set_xticks([1, 8, 15, 22, 29, 36, 42])
         ax.set_xlabel("day", fontsize=8, color=MUTED)
-        _style(ax)
     axes[0].set_ylabel("cash ($, end of day, before lifelines)", fontsize=8, color=MUTED)
     axes[0].legend(fontsize=7, frameon=False, loc="upper left")
     fig.suptitle(title + "  (grey band = convergence week)", fontsize=10, color=TEXT, x=0.01, ha="left")
@@ -64,6 +70,37 @@ def lowest_cash_day(runs_by_policy, path, title):
         _style(ax)
     axes[0].set_ylabel("share of runs", fontsize=8, color=MUTED)
     fig.suptitle(title + "  (grey band = days 28-35)", fontsize=10, color=TEXT, x=0.01, ha="left")
+    fig.tight_layout()
+    fig.savefig(path, dpi=130)
+    plt.close(fig)
+
+
+STRESS_ROWS = (("short_series", "short-term S"), ("long_series", "long-term L"), ("stress_series", "total T"))
+
+
+def stress_over_time(runs_by_policy, path, title):
+    """Rows: S, L, T (end of day, before sleep). Columns: policies. Dotted lines: T = 70 (the
+    high-stress level) on the T row, L = 40 (the stress goal's day-42 limit) on the L row."""
+    cols = len(runs_by_policy)
+    fig, axes = plt.subplots(3, cols, figsize=(3.0 * cols, 6.6), sharey=True, sharex=True)
+    for col, (policy, runs) in enumerate(runs_by_policy.items()):
+        for row, (key, label) in enumerate(STRESS_ROWS):
+            ax = axes[row][col]
+            _band_plot(ax, runs, key)
+            ax.set_ylim(0, 100)
+            if key == "long_series":
+                ax.axhline(40, color=MUTED, linewidth=0.8, linestyle=":")
+            if key == "stress_series":
+                ax.axhline(70, color=MUTED, linewidth=0.8, linestyle=":")
+            if row == 0:
+                ax.set_title(LABELS[policy], fontsize=9, color=TEXT, loc="left")
+            if col == 0:
+                ax.set_ylabel(label, fontsize=8, color=MUTED)
+            if row == 2:
+                ax.set_xlabel("day", fontsize=8, color=MUTED)
+    axes[0][0].legend(fontsize=7, frameon=False, loc="upper left")
+    fig.suptitle(title + "  (grey band = convergence week; dotted: L = 40, T = 70)", fontsize=10, color=TEXT,
+                 x=0.01, ha="left")
     fig.tight_layout()
     fig.savefig(path, dpi=130)
     plt.close(fig)
