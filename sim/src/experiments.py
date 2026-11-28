@@ -1,4 +1,4 @@
-"""Running many seeds: one run, a batch (in parallel), and the greedy-optimal search."""
+"""Running many seeds: one run, a batch (in parallel), the greedy-optimal search, the variant matrix."""
 import os
 from concurrent.futures import ProcessPoolExecutor
 
@@ -7,6 +7,8 @@ from .config import with_overrides
 from .metrics import aggregate
 
 POLICY_NAMES = ["careful", "book_heavy", "grinder", "careless", "greedy_optimal"]
+PLAYER_POLICIES = POLICY_NAMES[:4]          # the four player strategies (greedy-optimal is a search)
+VARIANTS = [(True, False), (False, False), (True, True), (False, True)]   # (with effects, story always taken)
 
 
 def run_greedy_optimal(cfg, pcfg, seed):
@@ -30,21 +32,17 @@ def run_one(cfg, pcfg, policy_name, seed):
 
 def _run_chunk(args):
     cfg, pcfg, policy_name, seeds, keep = args
-    out = []
-    for seed in seeds:
-        result = run_one(cfg, pcfg, policy_name, seed)
-        out.append(result if keep else slim(result))
-    return out
+    return [result if keep else slim(result) for result in (run_one(cfg, pcfg, policy_name, s) for s in seeds)]
 
 
 def slim(result):
     """Drop the bulky per-day/per-pick fields for sweeps."""
-    drop = {"cash_series", "picks", "shop_buys", "costs"}
+    drop = {"cash_series", "picks", "shop_buys", "costs", "overlap_hours"}
     return {k: v for k, v in result.items() if k not in drop}
 
 
-def variant_cfg(cfg, with_effects, advance):
-    return with_overrides(cfg, {"effects.enabled": with_effects, "book.advance_enabled": advance})
+def variant_cfg(cfg, with_effects, story_forced):
+    return with_overrides(cfg, {"effects.enabled": with_effects, "story_job.always_taken": story_forced})
 
 
 _POOL = None
@@ -67,13 +65,9 @@ def run_batch(cfg, pcfg, policy_name, seeds, keep=True, chunk=50):
 
 
 def run_matrix(cfg, pcfg, seeds, policy_names=POLICY_NAMES, keep=True):
-    """{(policy, with_effects, advance): [run summaries]} for all variants of §9.3."""
-    out = {}
-    for name in policy_names:
-        for with_effects in (True, False):
-            for advance in (False, True):
-                out[(name, with_effects, advance)] = run_batch(variant_cfg(cfg, with_effects, advance), pcfg, name, seeds, keep)
-    return out
+    """{(policy, with_effects, story_forced): [run summaries]} for all variants of §10.3."""
+    return {(name, eff, forced): run_batch(variant_cfg(cfg, eff, forced), pcfg, name, seeds, keep)
+            for name in policy_names for eff, forced in VARIANTS}
 
 
 def summarize_matrix(matrix):

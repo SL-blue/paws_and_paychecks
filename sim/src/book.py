@@ -1,4 +1,4 @@
-"""The character's own book (SIM_BASELINE.md §3.3): starts with progress, sized by hours."""
+"""The character's own book (SIM_BASELINE.md §3.4, v0.3): H hours of hard chapters left, +-5%."""
 from dataclasses import dataclass, field
 
 from .rng import stream
@@ -6,11 +6,10 @@ from .rng import stream
 
 @dataclass
 class Book:
-    start_progress: float
-    remaining_hours_nominal: float
+    remaining_hours_nominal: float     # hours left at the start, at the base 150 w/h
     words_total_remaining: float
     words_left: float
-    milestone_marks: list          # words_left values at which milestones are reached
+    milestone_marks: list              # words_left values at which milestones are reached
     milestones_done: int = 0
     hours: float = 0.0
     milestone_days: list = field(default_factory=list)
@@ -19,24 +18,35 @@ class Book:
     def finished(self):
         return self.milestones_done >= len(self.milestone_marks)
 
+    def last_milestone_share(self):
+        """Share of the current (next) milestone already done."""
+        n = len(self.milestone_marks)
+        if self.finished:
+            return 1.0
+        size = self.words_total_remaining / n
+        start = self.words_total_remaining * (1 - self.milestones_done / n)
+        return (start - self.words_left) / size
 
-def remaining_hours(cfg, progress):
-    """Linear: max progress -> remaining_hours_min, min progress -> remaining_hours_max."""
-    b, s = cfg["book"], cfg["start"]
-    lo, hi = s["book_progress_min"], s["book_progress_max"]
-    share = 0.5 if hi == lo else (hi - progress) / (hi - lo)
-    hours = b["remaining_hours_min"] + share * (b["remaining_hours_max"] - b["remaining_hours_min"])
-    return hours * b["remaining_hours_scale"]
+    def near_finished(self, last_share):
+        """All but the last milestone done and at least `last_share` of the last one."""
+        n = len(self.milestone_marks)
+        return not self.finished and self.milestones_done == n - 1 and self.last_milestone_share() >= last_share - 1e-9
 
 
 def new_book(cfg, seed):
-    s = cfg["start"]
-    progress = stream(seed, "book").uniform(s["book_progress_min"], s["book_progress_max"])
-    hours = remaining_hours(cfg, progress)
-    words = hours * cfg["book"]["words_per_hour"]
-    n = cfg["book"]["milestones"]
+    b = cfg["book"]
+    variation = b["remaining_hours_variation"]
+    hours = b["remaining_hours"] * stream(seed, "book").uniform(1 - variation, 1 + variation)
+    words = hours * b["words_per_hour"]
+    n = b["milestones"]
     marks = [words * (1 - (i + 1) / n) for i in range(n)]
-    return Book(progress, hours, words, words, marks)
+    return Book(hours, words, words, marks)
+
+
+def implied_start_progress(cfg, hours=None):
+    """Share of the book done at the start, for the story text (whole book = total_hours_reference)."""
+    b = cfg["book"]
+    return 1 - (b["remaining_hours"] if hours is None else hours) / b["total_hours_reference"]
 
 
 def work(book, words, hours, day):
