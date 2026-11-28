@@ -11,7 +11,7 @@ To change a decision, don't delete the old line. Add a new one and mark the old 
 - 2026-11-24 — v2 is for human players only; the v1 anti-AI-agent requirements no longer apply — the class assignment is done; the goal now is a story-driven game.
 - 2026-11-24 — Narrative life sim + resource management + roguelike, 42 in-game days (6 weeks) — long enough for the creature to grow up and for four story lines to build and converge.
 - 2026-11-24 — No instant-reaction gameplay; small interactions express feeling rather than test skill — fits a reflective, story-driven tone.
-- 2026-11-24 — Bankruptcy is possible; the ending depends on the final state of stress, the relationship and the pet — choices need real stakes, and the ending should reflect how the player lived.
+- 2026-11-24 — Bankruptcy is possible; the ending depends on the final state of stress, the relationship and the pet — choices need real stakes, and the ending should reflect how the player lived. **(superseded by 2026-11-27: five ending goals; bankruptcy becomes the parents' ending)**
 - 2026-11-24 — Not necessarily web-only; platform/engine undecided — the core loop should decide the engine, not the other way round.
 - 2026-11-24 — Tone: warm and honest, not complaining about the current state of the world.
 
@@ -37,13 +37,38 @@ To change a decision, don't delete the old line. Add a new one and mark the old 
 - 2026-11-26 — Real-world rates and throughput are kept; payment terms are compressed to game time (about 2–14 days, sometimes late) — real 30–60 day terms would pay most in-game work after the run ends, with no feedback for the player.
 - 2026-11-26 — One realistic long delay is kept as a fixed story event (a week-2 job paid in week 5) — keeps the real feeling of freelance cash flow where it hurts most, in the convergence week.
 - 2026-11-26 — Feedback on finished work comes at delivery (client reply, reputation, a visible "money owed" list); cash comes later — separates the sense of progress from cash flow.
-- 2026-11-26 — The book starts with progress already made (60–75%); the hard chapters remain, sized to about 60–80 hours of in-game work — it shows the character's long-standing commitment, justifies a slower pace, and makes finishing a real but doable sacrifice.
+- 2026-11-26 — The book starts with progress already made (60–75%); the hard chapters remain, sized to about 60–80 hours of in-game work — it shows the character's long-standing commitment, justifies a slower pace, and makes finishing a real but doable sacrifice. **(range superseded by 2026-11-27: narrower variation, sized by ending targets)**
 - 2026-11-26 — The economy is tuned by simulation, against acceptance targets per player strategy — balance should be measured, not guessed.
 
 ### Repo and tooling
 - 2026-11-26 — Design docs and the decision log live together in `design/` (the former `docs/` was merged into it) — one place for the source of truth.
 - 2026-11-27 — v2 has its own repo, separate from v1 — coding agents work only from v2's design, with no v1 code or rules in view.
 - 2026-11-27 — Tunable numbers live in `data/` (e.g. `data/economy.yaml`), outside `sim/` — the simulator uses them now and the game will read the same files later, so there is one set of numbers.
+
+### Endings (2026-11-27)
+- 2026-11-27 — Endings are built from five goals: keep the pet, a good relationship with her (not ignoring her too much), the book finished, low or medium stress, and a good financial situation; their combination decides the ending — the ending should reflect how the player balanced their life, not one score.
+- 2026-11-27 — The best ending needs all five goals, including the book; meeting the other four without the book is still a good ending — the book is the character's own voice, so it marks the best outcome, but a life kept in balance is already a good one.
+- 2026-11-27 — A good financial situation = not in the parents' ending, no debt left, and an end value of at least about one month's rent; "okay" = solvent but below that — "good" means a month of safety, not wealth.
+- 2026-11-27 — Bankruptcy doesn't end the run directly: borrowing from her raises stress sharply, and if the loan isn't repaid within 7 days (Normal; 5 on Hard), the game ends with the character's parents calling to help — a warm ending, not a punishment, that fits the tone.
+- 2026-11-27 — The book's finishing rate is set by ending targets (careful player: finishes ~40–50%, best ending ~25–35%; book-heavy: best ending ~45–55% with bankruptcy risk) — the best ending should be earned, not the default; committing to the book is rewarded at a risk.
+- 2026-11-27 — The book's starting progress varies only a little between runs, and a nearly finished book ("finished a month later") counts toward the good ending, not the best — finishing should depend on choices, not dice.
+- 2026-11-27 — The book pays no advance during the run — an advance made book-heavy play almost risk-free (27% → 1% bankrupt), and working on the book should stay a real sacrifice.
+
+### Work and money (2026-11-27)
+- 2026-11-27 — The week-2 story job is a story choice that is hard to refuse (it comes from the regular client); declining is allowed but hurts that client relationship — keeps the week-5 squeeze likely while leaving the choice to the player.
+- 2026-11-27 — A fixed small direct-client job on day 1–2, paid around day 4, opens the run — fixes the empty first week (feedback and the day-5 cash low) and doubles as a tutorial.
+- 2026-11-27 — The feedback target counts job payments only (the day-1 job included), not pre-move invoices — feedback should come from work the player actually played.
+- 2026-11-27 — The tax share is fixed at 22% and is no longer a tuning lever; how it is shown (net pay, a tax jar or a tax bill) is still open — it was the strongest lever in the economy and would hide other problems.
+- 2026-11-27 — Most clients are modeled as types; a few regular clients are a special kind with a slightly better pay-to-time ratio or faster payment, each with its own habits, from a shared simulation baseline — named clients carry the story without a full client system.
+- 2026-11-27 — Regular clients' work is mixed: one or two fixed story commissions on set days, plus random work that follows each client's habit — fixed beats serve the story; learnable habits reward planning.
+- 2026-11-27 — Rush jobs: about 15% of offers, half the deadline, 1.25× pay, and a higher stress cost — confirmed from the simulator's interpretation, with stress added.
+
+### Effects (2026-11-27)
+- 2026-11-27 — The effect pool grows to about 30–40 effects — with ~10–14 chances to pick per run, a small pool makes every run end with the same effects.
+- 2026-11-27 — Only a few effects speed up the book, not all efficiency effects — otherwise finishing the book depends mostly on which effects were offered.
+- 2026-11-27 — Efficiency effects get smaller individually, rather than a higher efficiency cap — a high cap shrinks the work time needed and distorts the whole economy.
+- 2026-11-27 — The CAT tool becomes weaker and more expensive (about +10% throughput, about $60/week; the simulation may fine-tune the price) — it was a near-automatic pick.
+- 2026-11-27 — "Her spreadsheet" is a story and UI effect only: it helps the player see the character's state, which they might otherwise ignore — it has no mechanical bonus.
 
 ## Implementation (agent choices)
 

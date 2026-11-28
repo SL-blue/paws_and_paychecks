@@ -1,19 +1,28 @@
-# Paws & Paychecks — Economy baseline & simulation spec (v0.2)
+# Paws & Paychecks — Economy baseline & simulation spec (v0.3)
 
-> Purpose: the starting numbers for the v2 financial system (money, time, effects), and the spec for a simulation that tests them. Written so a coding agent can build and run the simulation and write a report without further input. Companion to `STORY_CONCEPT_V2.md`.
+> Purpose: the starting numbers for the v2 financial system (money, time, effects), the ending rules the economy is balanced toward, and the spec for the simulation that tests them. Written so a coding agent can build and run the simulation and write a report without further input. Companion to `STORY_CONCEPT_V2.md` and `DECISIONS.md`.
 >
 > All numbers are **placeholders anchored in real-world data** (US dollars, US national averages, since the city is unspecified). They are meant to be tuned by the simulation, not treated as final. Anything marked **(tune)** is expected to move.
 >
-> **Changes in v0.2:** payment terms compressed to game time, with one long story delay (§3.4); feedback on delivery separated from cash (§3.6); the book starts with progress already made, sized by an hour budget (§3.3); starting cash to be re-tuned for the faster cash flow (§5, §9.3); the earlier pre-check figures no longer apply (§9.5).
+> **Changes in v0.3** (after the first simulation round, `sim/reports/SIM_REPORT.md`; see `DECISIONS.md`, 2026-11-27):
+> - **Endings** are defined: five goals, tiers, and targets per strategy (§9). They replace the simulator's temporary "good combined ending".
+> - **Bankruptcy becomes the parents' ending:** borrowing from her raises stress, and an unrepaid loan after 7 days ends the run (§6).
+> - **Book:** no advance; remaining work varies only ±5% and is tuned to the ending targets; "near-finished" added (§3.4).
+> - **Clients:** three regular clients with habits and fixed story commissions (§3.3). The week-2 story job comes from one of them and is declinable at a cost. A fixed day-1 job opens the run (§3.6).
+> - **Taxes** fixed at 22% and removed from tuning (§4).
+> - **Rush jobs** confirmed, with higher stress (§3.1, §7).
+> - **Effects:** pool grows from 12 to 36 (30 offered + 6 shop). Efficiency effects are smaller. The CAT tool is weaker and pricier. Only a few effects help the book. A throughput cap and 3 designed synergies are added. Her spreadsheet becomes UI-only. Work-milestone offers come every 8th job (§8).
+> - **Simulation:** the book-advance variant is replaced by a story-job variant; new acceptance targets; NET removed from the sweep; new sweep parameters (§10).
 
 ## 1. Design approach
 
 - **The financial system is designed first**, with **time as the shared currency**. Stress, the relationship and the pet are not derived *from* money; they are coupled to it through time and efficiency:
   - Relationship and pet need **hours** (evenings with her, walks, play). Every hour they get is an hour not billed.
-  - **Stress** is driven by workload, short sleep, deadlines and money anxiety, and it feeds back into **working efficiency**.
+  - **Stress** is driven by workload, short sleep, deadlines, money anxiety and debt, and it feeds back into **working efficiency**.
   - Money pressure can **trigger** relationship events (e.g. borrowing from her), but the relationship is not a function of money.
-- In the simulation, stress is modeled numerically; relationship and pet are modeled as **time demands with thresholds** (enough evenings with her per week, enough daily care) plus a few money-relevant events. Their narrative depth is out of scope here.
-- **Game-time scaling:** real-world rates and throughput are kept; **payment delays are compressed** to fit a 42-day run, so that players see payments for work they actually played (§3.4).
+- In the simulation, stress is modeled numerically; relationship and pet are modeled as **time demands with thresholds**, plus a few money-relevant events. Their narrative depth is out of scope here.
+- **Game-time scaling:** real-world rates and throughput are kept; **payment delays are compressed** to fit a 42-day run (§3.5).
+- **Balance is measured against the endings** (§9): neglect may pay in money, but it must cost in the ending.
 
 ## 2. Calendar and time
 
@@ -34,16 +43,14 @@
 | Standard translation (agency) | 310 | 0.10 | ~31 | The default bread-and-butter job |
 | Standard translation (direct client) | 310 | 0.14 | ~43 | Rarer offers; fastest payment |
 | Post-editing (MTPE) | 470 | 0.055 | ~26 | More words, less per word, lower hourly; share grows over the run ("the weather") |
-| Rush job | 310 (×1.0) | base × 1.25 | +25% | Tight deadline; adds stress; often needs evening/weekend hours |
-| Own book (literary) | **150** | — | ~0 (see 3.3) | Slow, careful work choosing words and phrases; restores stress |
+| Rush job | 310 | base × 1.25 | +25% | **~15% of non-PE random offers**; deadline × 0.5; extra stress (§7) |
+| Own book (literary) | **150** | — | 0 (no advance) | Slow, careful work choosing words and phrases; restores stress |
 
-Grounding: agencies expect roughly 2,000–3,000 finished words per day (≈310/h over 8 h); standard agency rates sit around $0.10–0.13/word; MTPE roughly $0.05–0.15 vs. $0.15–0.30 for full translation; a working estimate of ~450–500 words/hour post-editing vs. ~300–350 translating. Literary throughput (150 w/h) is a design assumption to tune.
+Grounding: agencies expect roughly 2,000–3,000 finished words per day (≈310/h over 8 h); standard agency rates sit around $0.10–0.13/word; MTPE roughly $0.05–0.15 vs. $0.15–0.30 for full translation; a working estimate of ~450–500 words/hour post-editing vs. ~300–350 translating. Literary throughput (150 w/h) is a design assumption.
 
-**Net income:** apply **NET = 0.78** to all payments (≈22% set aside for taxes; tune). The game can show this as an automatic "tax jar" or simply pay net amounts.
+### 3.2 Job offers (random)
 
-### 3.2 Job offers
-
-- Offers arrive on weekdays: **Poisson(1.3)/day** (tune), shown with size, rate, deadline and payment terms.
+- Random offers arrive on weekdays: **Poisson(0.9)/day** (tune). This is lower than v0.2's 1.3 because regular clients (§3.3) now add about 2.5 jobs a week. Offers show size, rate, deadline and payment terms.
 - Sizes:
 
 | Size | Words | ≈ Hours (standard) | Share of offers |
@@ -52,53 +59,78 @@ Grounding: agencies expect roughly 2,000–3,000 finished words per day (≈310/
 | Medium | 3,000–6,000 | 10–20 | 35% |
 | Large | 10,000–20,000 | 32–65 | 15% |
 
-- Deadline = estimated hours / 6 working days × uniform(1.1, 1.8), min 1 day (tune).
-- Missing a deadline: −20% payment and a reputation hit (fewer/lower offers from that client for 7 days).
-- **Story hook (fixed):** in week 2 or 3, the regular client switches to post-editing; from then on, the PE share of offers rises from ~25% to ~50% by week 6.
+- Deadline = estimated hours / 6, in working days, × uniform(1.1, 1.8), min 1 day (tune). Rush: × 0.5.
+- Missing a deadline: −20% payment and a reputation hit with that client type (offers from that type dropped with 50% chance and paid × 0.9 for 7 days).
 - Offers expire after 1 day if not accepted.
 
-### 3.3 The book project (starts with progress)
+### 3.3 Regular clients
 
-- The character has been translating the book in spare time for months (since before the move). **At the start of the run, 60–75% of the book is already done** (random per run; tune).
-- What remains are **the hard parts**: the chapters the character kept putting off. Which chapters remain can vary per run.
-- **Size the remaining work by hours, not words:** finishing should take **60–80 hours** of book work (≈ a quarter to a third of a careful player's working time). At 150 w/h that is **≈9,000–12,000 words** remaining (derive per run from the starting progress).
-- Split into **3 milestones** (≈ 20–27 h each).
-- Pays nothing by default. Variant to simulate: **small advance**, $400 (gross) per milestone.
-- Each book hour reduces stress (see §7). Each milestone grants an effect offer (see §8) and a story beat.
-- "Book finished" = all 3 milestones by day 42.
+Most clients are **types** (direct / standard agency / slow agency). On top of that, there are **three regular clients**. Each has its own habit, better terms, and fixed story commissions.
 
-### 3.4 Payment terms (compressed to game time)
+| Client | Type | Better terms (vs. its type) | Habit (random work) | Fixed story commissions |
+|---|---|---|---|---|
+| **A — the regular agency** | Standard agency | Pays in **5 days** (not 7); rate +10% | ~1 job/week, usually offered on Monday (±1 day); mostly medium | The **week-2 story job** (§3.6); A is the client that **switches to post-editing** in week 2–3 |
+| **B — the direct client** | Direct | Rate +10% | ~1 small job/week, usually Thursday (±1 day) | The **day-1 job** (§3.6) |
+| **C — the slow publisher-side agency** | Slow agency | Pays in **10 days** (not 14); rate +10% | ~1 medium or large job every 2 weeks, any weekday | None (v0.3) |
 
-| Client type | Share of jobs | Paid … after delivery |
+- Habit draws: each week, each regular client sends a job with the probability given (A 0.9, B 0.8, C 0.45/week; tune) on its usual day ±1.
+- **Reputation counts double** for regular clients: a missed deadline drops their offers for **14 days**.
+- **Post-editing switch:** client A's offers become PE from a day drawn uniformly in 8–21. Separately, the PE share of random offers rises from ~25% to ~50% by day 36 (as in v0.2).
+- Individual habits can differ in the game. This table is the simulation baseline.
+
+### 3.4 The book project
+
+- The character has been translating the book in spare time for months. **What remains are the hard parts:** the chapters the character kept putting off.
+- **Remaining work: H hours ± 5%** (random per run), at 150 w/h. **H starts at 70 h and is tuned** so the careful player finishes in ~40–50% of runs (§10.5). Report the chosen H, and the matching starting progress, for the story text.
+- **3 milestones** of H/3 each. Each grants an effect offer (§8) and a story beat.
+- **No advance.** The book pays nothing during the run.
+- **Finished** = all 3 milestones by day 42. **Near-finished** = milestones 1–2 done and ≥ 50% of milestone 3. This counts toward the good ending ("finished it a month later") but not the best one (§9).
+- Book hours reduce stress (§7). Only effects marked **📖** in §8.4 change book speed.
+
+### 3.5 Payment terms (compressed to game time)
+
+| Client type | Share of random jobs | Paid … after delivery |
 |---|---|---|
 | Direct client | 25% | 2–3 days |
 | Standard agency | 50% | ~7 days |
 | Slow agency | 25% | ~14 days |
 
-- Additionally, **20% of payments arrive 3–7 days late** (tune).
-- **Fixed story event (the one realistic delay):** a **large agency job taken in week 2** is paid only in **week 5** (≈ 3 weeks after delivery), landing in the convergence week alongside rent (day 31) and the vet bill. Its size should be large enough to matter (≈ 10,000–15,000 words; tune).
+- Regular clients pay per §3.3.
+- **20% of payments arrive 3–7 days late** (drawn per job; tune).
 - Real-world reference (for flavor text only): agencies commonly pay at 30/45/60 days.
 
-### 3.5 Pre-move receivables (fixed, story-tied)
+### 3.6 Fixed jobs and pre-move receivables
 
-Invoices for work done before the move, arriving during the run (amounts to be re-tuned; with faster payments they may be reduced):
+**Fixed jobs**
+
+| Job | Client | Offered | Size | Deadline | Paid |
+|---|---|---|---|---|---|
+| **Day-1 job** (also the tutorial) | B (direct) | Day 1 | 1,200 words (~4 h) | End of day 2 | 2 days after delivery (≈ day 4) |
+| **Week-2 story job** | A (regular agency) | Day 8 | 12,500 words (tune) | Normal formula | Day 33, or 7 days after delivery if later |
+
+- The day-1 job is **always taken** (tutorial).
+- The week-2 story job is a **story choice that is hard to refuse**. In the game it is framed as a request from the regular client. **Declining** is allowed, but client A's offers drop by 50% for the rest of the run, and a story beat follows. Simulate both variants (§10.3).
+
+**Pre-move receivables** (invoices for work done before the move; amounts tune):
 
 | Day | Amount (net) |
 |---|---|
-| 6 | 600 (tune) |
-| 13 | 900 (tune) |
-| 24 | 500 (originally due day 18; arrives late) (tune) |
+| 6 | 600 |
+| 13 | 900 |
+| 24 | 500 (originally due day 18; arrives late) |
 
-### 3.6 Feedback on delivery (separate from cash)
+The first round's recommended move of the day-6 invoice to day 4 is **not** applied, because the day-1 job now covers week 1.
+
+### 3.7 Feedback on delivery (separate from cash)
 
 When a job is delivered, the player gets immediate feedback even though cash comes later:
 - The client's reply (quality/tone reaction; occasionally a revision request).
-- A reputation change with that client (affects future offers).
+- A reputation change with that client.
 - The invoice appears in a visible **"money owed" list** with its expected payment date (and a late flag if overdue).
 
 The simulation only needs the reputation effect; the rest is UI/narrative.
 
-## 4. Costs
+## 4. Costs and taxes
 
 | Item | Amount | When |
 |---|---|---|
@@ -108,28 +140,36 @@ The simulation only needs the reputation effect; the rest is UI/narrative.
 | Pet starter supplies | 250 | Day 1 |
 | Vet: first exam + vaccines | 150 | Day 3 (fixed) |
 | Vet: booster visits | 100 each | Days 17 and 31 (fixed) |
-| Pet transformation/illness (week 5) | 300 / 500 / 800 (random; lower if pet care has been good) | ~Day 30 |
+| Pet transformation/illness (week 5) | 300 / 500 / 800 (odds depend on pet care; keep the round-1 odds) | ~Day 30 |
 | Random small costs (breakages, a gift, a dinner out) | 20–150 | From events (~1 per 4 days) |
 
-Grounding: one-bedroom national average ~$1,500–1,650/month; first puppy exam ~$50–150; puppy vaccines $75–200 per visit across several visits; emergency vet $280–1,750.
+**Taxes: fixed at 22%** (NET = 0.78 on all payments). This is **not a tuning lever**. Keep it out of the sensitivity sweep, except for one reference row. How the game shows it (net pay, a tax jar or a tax bill) is open.
 
 ## 5. Starting state
 
-- **Cash after day-1 rent: to be tuned.** Start the search at 2,000 and expect it to come down (likely ~1,200–1,600) because compressed payment terms speed up cash flow. See §9.3.
-- **Book progress:** 60–75% done (§3.3).
+- **Cash after day-1 rent: re-search** (§10.3). Round 1 chose 1,400. v0.3 changes (day-1 job, regular clients, no book advance, smaller efficiency effects) will shift it.
+- **Book:** H ± 5% hours remaining (§3.4).
 - Stress: low. Relationship: good. Pet: baby, healthy.
-- No effects at start (working style may be a starting effect; see §8).
+- No effects at start.
 
-## 6. Money crisis and bankruptcy
+## 6. Money crisis, the loan, and the parents' ending
 
-- **Crisis:** cash < 0 at the end of a day. The player gets lifelines (each usable once unless noted):
-  1. **Borrow from her** (up to 800). Repayable; triggers a relationship event (how it's asked matters).
-  2. **Ask a client to pay early** at −10% of that invoice.
-  3. **Pay rent late** once, with a 75 late fee, up to 7 days.
-- **Bankrupt:** cash < 0 with no lifeline left, **or** cash < −300 at any point. Bankruptcy is an ending path, not an immediate game over (tune).
-- **End-of-run money value** = cash + 0.9 × outstanding receivables − debts. (Without counting receivables, work in the last days would be pointless.)
+- **Crisis:** cash < 0 at the end of a day. Lifelines, in this order (each once):
+  1. **Pay rent late** (if rent fell due today): +75 fee, due within 7 days.
+  2. **Ask a client to pay early:** −10% of the smallest job invoice that covers the gap.
+  3. **Borrow from her:** up to 800 (shortfall + 200 buffer, within the max). This is the last lifeline.
+- **The loan:**
+  - Borrowing raises stress by **+15** at once, then **+3/day** until the loan is repaid.
+  - It must be **repaid in full within 7 days** (Normal; 5 on Hard). In the game, she mentions it around day 5 (story beat; no mechanic).
+  - Policies repay as soon as cash allows (keeping 2 days of costs).
+- **The parents' ending** (replaces "bankrupt") happens when:
+  - the loan isn't repaid by its deadline, **or**
+  - cash is below **−300** at the end of a day with no lifeline left.
 
-## 7. Stress (v0) and other time demands
+  The character's parents call and help. **The run ends that day** (ending tier: parents, §9). In the simulation, record the day and compute metrics up to it.
+- **End-of-run money value** = cash + 0.9 × outstanding receivables − debts.
+
+## 7. Stress (v0.3) and other time demands
 
 ### Stress
 Internal 0–100 (shown per difficulty, see `STORY_CONCEPT_V2.md`). Daily change:
@@ -139,137 +179,251 @@ Internal 0–100 (shown per difficulty, see `STORY_CONCEPT_V2.md`). Daily change
 | Each paid work hour beyond 6 in a day | +2 |
 | Each hour of sleep cut | +4 (and next-day efficiency −5% per hour cut) |
 | Each consecutive short night (<7 h) after the first | +3 extra |
-| A deadline due tomorrow with work remaining | +5 |
+| A job due tomorrow with work remaining | +5 per job (**+8** if it's a rush job) |
 | Cash runway < 7 days of costs | +4/day |
-| A rush job in progress | +2/day |
-| Each leisure / time-with-her hour | −2 |
+| **A rush job in progress** | **+3/day** (was +2) |
+| **Borrowing from her** | **+15** once, then **+3/day until repaid** |
+| Each leisure / time-with-her hour | −2 (leisure counted up to 4 h/day; keep the round-1 rule) |
 | Each book hour | −2.5 |
 | A day with no paid work | −6 |
 | Natural recovery | −3/day |
 
-Efficiency multiplier from stress: **1.0** below 50; then **−1% per point above 50** (e.g. stress 80 → 0.70). Above 85 for 2+ days: illness risk 15%/day (lose a day's work; vet-style cost 0–80).
+Efficiency multiplier from stress: **1.0** below 50, then **−1% per point above 50**. Above 85 for 2+ days: illness risk 15%/day (lose a day's work; cost 0–80).
 
-### Relationship (time demand, simulated)
-- Needs **≥3 evenings with her per week (≥2 h each)**, or 2 evenings + a weekend half-day. She is only available evenings and weekends (office hours).
-- A missed week → a negative relationship event; two in a row → strong negative.
-- She has her own crunch in weeks 4–5: fewer available evenings (2/week), which makes each one more valuable.
+### Relationship (time demand)
+- Needs **≥3 evenings with her per week (≥2 h each)**, or 2 evenings + a weekend half-day (≥4 h). She is only available evenings and weekends.
+- Her crunch in weeks 4–5: 2 free evenings a week.
+- A missed week → a negative relationship event.
 
-### Pet care (time demand, simulated)
-- Daily care: **2.5 h** (baby, days 1–13), **2 h** (days 14–27), **1.5 h** (days 28–42).
-- Each day below need → raises the week-5 illness cost tier and the chance of small damage costs.
+### Pet care (time demand)
+- Daily care: **2.5 h** (days 1–13), **2 h** (days 14–27), **1.5 h** (days 28–42).
+- Each day below need is a **deficit day**. Deficit days raise the week-5 bill tier and the chance of small damage costs (25% per deficit day, $20–150).
 
 ## 8. Effects (roguelike layer)
 
 ### 8.1 How effects are offered (mixed)
-Each offer = **pick 1 of 3**, drawn at random from the pool (no duplicates of held effects).
+Each offer = **pick 1 of 3**, drawn at random from the offerable pool (no duplicates of held effects).
 
 | Source | When | Expected offers / run (careful player) |
 |---|---|---|
 | Weekly reflection (guaranteed) | End of weeks 1–5 | 5 |
-| Work milestone (earned) | Every 4th completed paid job | ~2–3 |
+| Work milestone (earned) | **Every 8th completed paid job** (was every 4th) | ~2–3 |
 | Book milestone (earned) | Each book milestone | 0–3 (only if pursued) |
 | Shop (bought) | Always available; items cost money | 0–2 |
 
-**Target: a careful player holds 7–9 effects by the end; a neglectful or narrowly focused one, 5–6.**
+**Target:** a careful player holds **7–9** effects by the end; a neglectful or narrowly focused one, **5–6**.
 
-### 8.2 Sizing: why the timing matters
-An effect's total value ≈ its strength × the work-days left after it's taken. Average efficiency boost over the run:
+### 8.2 Sizing
+An effect's total value ≈ its strength × the work-days left after it's taken:
 
 > avg boost ≈ Σ eᵢ × (42 − tᵢ) / 42
 
-Example: four +10% efficiency effects taken on days 7, 14, 21, 28 → avg boost ≈ 0.10 × (35+28+21+14)/42 ≈ **+23%** over the run, ending at **+40%**.
+Efficiency effects are **individually smaller** in v0.3 (mostly +5–8%), so less work time is needed to earn the same money. Targets for a well-built careful character (tune):
+- average effect boost on paid work over the run: **+10–20%** (was +15–25%);
+- in the last 5 workdays: **+20–35%** (was +30–50%).
 
-Targets:
-- **End-of-run efficiency boost** for a well-built character: **+30–50%**; average over the run: **+15–25%**.
-- Early effects (weeks 1–2) are worth ~2–3× late ones. So **late offers (weeks 4–5) should lean toward stress, relationship, pet and one-off money effects** rather than efficiency, or be stronger.
+Early effects are worth more than late ones. From day 22, efficiency and throughput effects are drawn at half weight (keep the round-1 rule).
 
-### 8.3 Stacking rules
-- Within a category, effects **add**; each category has a cap: efficiency **+40%**, rate **+25%**, stress-relief multipliers **+50%**.
-- Categories **multiply** with each other.
-- 2–3 **designed synergies** (named combos) are allowed above caps; nothing else may exceed them.
+### 8.3 Categories, caps and synergies
+- Within a category, bonuses **add**, up to a cap. Categories **multiply** with each other.
 
-### 8.4 Starter pool (v0, sizes tunable)
-
-| Effect | Category | Upside | Downside / cost |
-|---|---|---|---|
-| Deep focus | Efficiency (style) | +15% efficiency on days with only one paid project | −10% on days with 2+ projects |
-| Context switcher | Efficiency (style) | +12% efficiency on days with 2+ different tasks | −8% on single-project days |
-| Morning person | Efficiency | +15% efficiency for work before 13:00 | −10% after 19:00 |
-| Night owl | Efficiency | +15% after 19:00 | Sleep cuts cost +1 stress/h more |
-| Noise-cancelling headphones | Efficiency (shop) | Interruptions remove 30% less time | 120 |
-| Coworking pass | Efficiency (shop) | +10% efficiency on days worked there; −50% pet interruptions | 60/week; pet alone more (care need +0.5 h) |
-| CAT-tool subscription | Throughput | +15% throughput on standard & PE jobs | 30/week |
-| Direct-client network | Rate | Direct-client offers ×2 | Direct clients request revisions (−1 h per job) |
-| Fast invoicer | Cash flow | Slow-agency jobs (14 days) pay in ~7 days | −3% on those payments |
-| Morning pages | Stress | −1 stress per day; book hours −3.5 instead of −2.5 | 30 min each morning |
-| Walk routine | Pet / stress | Pet care hours also reduce stress (−1/h) | Walks can't be skipped without extra pet penalty |
-| Her spreadsheet | Money / relationship | Shows exact upcoming cash low point | Unlocks only after an evening with her; she checks in on it |
-
-## 9. Simulation spec (for the coding agent)
-
-### 9.1 Build
-- Python (or TypeScript), **seeded** RNG, deterministic per seed. No UI.
-- One module per system: calendar, offers/jobs, payments, costs, stress, time demands, effects, lifelines, book.
-- All numbers in one config file so they can be tuned without code changes.
-
-### 9.2 Player strategies (policies) to simulate
-Each policy also needs a simple effect-picking rule.
-
-| Policy | Paid hours/weekday | Book | Her / pet | Sleep | Effect picks |
-|---|---|---|---|---|---|
-| **Careful** | 6–7 | ~1.5 h/day | Meets needs | Rarely cuts | Balanced (highest expected value) |
-| **Book-heavy** | 4–5 | ~2.5 h/day | Meets needs | Rarely cuts | Stress/book-leaning |
-| **Grinder** | 9–10 + weekends | None | Misses some | Cuts often | Efficiency/rate only |
-| **Careless** | 5–6, accepts poorly | Occasional | Inconsistent | Random | Random |
-| **Greedy-optimal** | Search-based: maximizes end money value | — | Ignores unless forced | — | Greedy |
-
-Also run **every policy with no effects** as a control.
-
-### 9.3 Runs
-- 2,000 seeds per policy × {no effects, with effects} × {book unpaid, small advance}.
-- **Starting-cash search first:** sweep starting cash from 800 to 2,400 in steps of 200 (and optionally the pre-move receivable amounts) and pick the value that best meets the acceptance targets in §9.5. Use that value for all other runs and report it.
-- Then a **sensitivity sweep** (±25%) on: starting cash, rent, offer rate, PE share, payment delays, late-payment share, size of the week-2 story job, NET, effect sizes, book starting progress.
-
-### 9.4 Metrics
-- Bankruptcy rate; crisis rate (cash < 0 before lifelines); lifelines used.
-- Day of lowest cash (distribution) and the lowest cash value.
-- End money value (cash, receivables, debts).
-- Days with stress > 70 (and in weeks 4–5 specifically); illness days.
-- Relationship weeks missed; pet-care deficit days.
-- Book milestones reached / book finished; book hours spent.
-- Effects held at end; offers received by source; pick frequencies; effects over-represented in the top 10% of runs.
-- Feedback cadence: median days between a job's delivery and its payment; number of payments received per week.
-
-### 9.5 Acceptance targets (Normal difficulty, with effects)
-
-| Policy | Target |
+| Category | Cap |
 |---|---|
-| Careful | Bankrupt ≤ 8%; lowest cash falls in days 28–35 in ≥ 60% of runs; book finished ≥ 30% |
-| Book-heavy | Bankrupt 15–30%; book finished ≥ 70%. Risky, but viable |
-| Grinder | Bankrupt ≤ 5%, but stress > 70 on ≥ 40% of days in weeks 4–5 **and** relationship needs missed ≥ 2 weeks |
-| Careless | Bankrupt ≥ 60% |
-| Greedy-optimal | Must not dominate on the combined ending: it should miss relationship/pet/stress thresholds |
-| Effects | No single effect in > 70% of top-decile runs; no combo exceeds caps except designed synergies |
-| Feedback | Every policy that works receives at least one payment in each of weeks 1–6 |
+| efficiency | +40% |
+| throughput (new) | +15% |
+| rate | +25% |
+| stress_relief (multipliers) | +50% |
+| book (book speed, new) | +20% |
 
-Note: an earlier quick pre-check (real-world 7/30/45-day terms, book from 15,000 words, no effects) is **no longer valid** for this version and should not be used as a reference.
+- **Designed synergies** (v0.3) may go above the caps. When both effects are held:
 
-### 9.6 Report
-Write `SIM_REPORT.md` with:
-1. The chosen starting cash (and receivable amounts, if changed) and why.
-2. Summary table per policy (both with and without effects, both book variants).
-3. Whether each acceptance target is met.
-4. Charts: cash over time (median and 10th/90th percentile) per policy; distribution of the lowest-cash day.
-5. Effects analysis: offers by source, held count, dominant effects or combos.
-6. Sensitivity: which parameters move the results most.
-7. **Recommended changes** to the config, with the expected effect of each, and a re-run with the recommendations applied.
-8. Open issues found (degenerate strategies, dead effects, exploits).
+| Synergy | Effects | Bonus |
+|---|---|---|
+| **The quiet house** | Deep focus + Noise-cancelling headphones | +4% efficiency on single-project days, above the cap |
+| **First audience** | Reading aloud + Walk routine | Reading aloud's pet-care overlap rises from 0.5 to 1 h/day |
+| **Steady hands** | Loyal client + Termbase | Regular clients pay 2 days faster |
 
-## 10. Open items this spec does not settle
+### 8.4 The pool (v0.3: 36 effects = 30 offered + 6 shop)
 
-- Exact difficulty differences (suggested: Gentle +30% starting cash and fewer late payments; Hard −20% starting cash and more late payments).
-- Whether the book has a small advance (simulate both).
-- Narrative content of events; only their money/time/stress effects are modeled here.
+Legend: **📖** = changes book speed. **(shop)** = bought, never drawn in offers. "Time" means the effect takes hours from the day; take them from free time first, then from paid time.
+
+**Work style and efficiency** (efficiency cap +40%)
+
+| Id | Effect | Upside | Downside / cost |
+|---|---|---|---|
+| deep_focus | Deep focus 📖 | +8% efficiency (paid **and** book) on days with only one paid project | −6% on days with 2+ paid projects |
+| context_switcher | Context switcher | +7% efficiency on days with 2+ tasks (paid projects + book) | −5% on single-task days |
+| morning_person | Morning person | +8% on the first 4 work hours | −6% on work hours beyond 8 |
+| night_owl | Night owl | +10% on work hours beyond 8 (evenings) | −5% on the first 4 work hours |
+| pomodoro | Pomodoro timer | +6% on days with ≤ 7 paid hours | −6% on paid hours beyond 8 |
+| sunday_planning | Sunday planning | +5% efficiency all next week | 1 h every Sunday (time) |
+| coworking | Coworking pass (shop) | +6% on days worked there; −50% pet interruptions | 60/week from purchase; +0.5 h pet care on those days |
+| headphones | Noise-cancelling headphones (shop) | Interruptions remove 30% less time (paid and book) | 120 once |
+
+**Throughput** (throughput cap +15%)
+
+| Id | Effect | Upside | Downside / cost |
+|---|---|---|---|
+| cat_tool | CAT-tool subscription | **+10%** throughput on standard & PE jobs (was +15%) | **60/week** (was 30; tune toward the pick-rate target) |
+| second_monitor | Second monitor (shop) | +5% throughput on standard jobs | 180 once |
+| termbase | Termbase | +8% throughput on regular-client jobs | The first job from each regular client after taking it costs +2 h |
+| pe_veteran | Post-editing veteran 📖 | +15% throughput on PE jobs | −4% efficiency on standard translation; **−5% book speed** ("the machine's voice creeps in") |
+
+**Rate and clients** (rate cap +25%)
+
+| Id | Effect | Upside | Downside / cost |
+|---|---|---|---|
+| direct_network | Direct-client network | Direct-client random offers ×2 | +1 h unpaid revision per direct job |
+| specialist_niche | Specialist niche | +15% rate on standard translation | Random offers −20% |
+| rush_specialist | Rush specialist | Rush offers ×2; rush rate ×1.4 (not 1.25) | Rush jobs add +2 stress/day more |
+| loyal_client | Loyal client | Regular clients send +50% more jobs | −10% rate on regular-client jobs (loyalty discount) |
+
+**Cash flow and money**
+
+| Id | Effect | Upside | Downside / cost |
+|---|---|---|---|
+| fast_invoicer | Fast invoicer | Slow-agency jobs (14 days) pay in 7 days (**no fee**, was −3%) | 0.5 h of admin every Monday (time) |
+| invoice_reminders | Invoice reminders | Late payments arrive half as late (rounded up) | A missed deadline for a regular client drops their offers for 21 days (not 14) |
+| deposit_terms | Deposit terms | Large jobs pay 30% on acceptance (rest on normal terms) | Large-job offers −25% |
+| side_class | Saturday class | +100 net every Saturday | 4 h every Saturday (time; counts as paid hours for stress) |
+| frugal_cooking | Frugal cooking | Living costs −6/day | 0.5 h/day (time) |
+
+**Stress and rest** (stress_relief cap +50%)
+
+| Id | Effect | Upside | Downside / cost |
+|---|---|---|---|
+| morning_pages | Morning pages | −1 stress/day; book hours relieve 3.5 (not 2.5) | 0.5 h every morning (time) |
+| nap_habit | Afternoon nap | On days with stress > 50: a 1 h nap gives −5 stress | That 1 h (time) |
+| boundaries | Work boundaries | Leisure relieves ×1.2; −1 stress/day | No paid work after 19:00 (hours beyond 8 impossible) |
+| standing_desk | Standing desk (shop) | Paid hours beyond 6 add +1 stress each (not +2) | 150 once |
+
+**Her** (relationship)
+
+| Id | Effect | Upside | Downside / cost |
+|---|---|---|---|
+| shared_calendar | Shared calendar | In her crunch weeks she has 3 free evenings (not 2) | A planned evening that is skipped counts as a missed week |
+| sunday_brunch | Sunday brunch | A 3 h weekend slot counts as a half-day (not 4 h) | 25 per brunch |
+| quiet_company | Quiet company 📖 | Up to 1 h of book per evening with her counts for both | Those hours relieve −1 stress (not −2) |
+| evening_walks | Evening walks together | Up to 1 h/day of pet care can overlap with time with her | Pet care need +0.25 h/day |
+
+**The creature** (pet)
+
+| Id | Effect | Upside | Downside / cost |
+|---|---|---|---|
+| walk_routine | Walk routine | Pet care hours also reduce stress (−1/h) | A skipped walk counts as 2 deficit days |
+| reading_aloud | Reading aloud 📖 | Up to 0.5 h/day of book time also counts as pet care; book hours relieve +0.5 more | Book speed −10% during those hours |
+| neighbor_sitter | The neighbor | Once a week, one day's pet care need can be covered | 25 per use, or 2 h of help on Sunday |
+| puppy_class | Puppy class (shop) | Pet care need −0.5 h/day from day 14 | 120 once; 2 h every Saturday in weeks 2–4 |
+| sturdy_toys | Sturdy toys (shop) | Pet damage chance halved | 40 once |
+
+**The book** (book cap +20%)
+
+| Id | Effect | Upside | Downside / cost |
+|---|---|---|---|
+| margin_notes | Old margin notes 📖 | +8% book speed | Book hours relieve 2 (not 2.5) |
+| writing_group | Writing group 📖 | Once a week, a 2 h book session that evening: +10% book speed that week, and the session relieves double | The session takes one evening (it can't be with her) |
+
+**Not in the pool:** **Her spreadsheet** is a story and UI feature with no mechanical effect: it helps the player see the character's state and upcoming cash. In the game, it is unlocked by a story event (an evening with her), not by a pick. Remove it from the simulation's offer pool.
+
+### 8.5 Notes for implementation
+- Effects that need data the simulator lacks (e.g. "the first job from each regular client") should use the simplest reading. Log it under "Implementation" in `DECISIONS.md` and in the report's open issues.
+- **Policy pick rules** must handle the new effects. Value-based policies can use hand-set weights per effect in `data/policies.yaml` or a short look-ahead. Document the method.
+- Effects held by **0% of runs** across all policies, or picked **< 10% of the time** when offered by every policy, are "dead". Report them.
+
+## 9. Endings
+
+### 9.1 The five goals (simulation definitions; tune)
+
+| Goal | Met when |
+|---|---|
+| **Pet kept** | ≤ 4 pet-care deficit days over the run |
+| **Relationship good** | ≤ 1 week of relationship needs missed, never 2 weeks in a row, and any loan from her repaid on time |
+| **Book finished** | All 3 milestones by day 42 (near-finished: see §3.4) |
+| **Stress low/medium** | Average stress over days 36–42 ≤ 60, **and** ≤ 6 days with stress > 70 over the run |
+| **Finances good** | Not the parents' ending, no debt left, end money value ≥ **1,500** (≈ one month's rent). "Okay" = solvent but below 1,500 |
+
+### 9.2 Ending tiers
+
+| Tier | Condition |
+|---|---|
+| **Parents' ending** | Triggered as in §6; overrides everything else |
+| **Best** | All five goals met |
+| **Good** | Pet, relationship, stress and finances all met; book **not** finished (near-finished or not) |
+| **Mixed** | At least 3 of the 5 goals met, but not Best or Good |
+| **Hard** | 2 or fewer goals met |
+
+Which goals are missed shapes the ending's text. That's a writing task; the simulation reports the counts.
+
+### 9.3 Targets (Normal difficulty)
+
+| Policy | Finishes book | Best | Good or better | Parents' ending |
+|---|---|---|---|---|
+| Careful | ~40–50% | ~25–35% | ~70–80% | ≤ 8% |
+| Book-heavy | ~85–95% | ~45–55% | ~60–70% | 15–30% |
+| Grinder | ~0% | 0% | ≤ 10% | ≤ 5% |
+| Careless | ~0–5% | ~0% | ≤ 10% | ≥ 60% |
+| Greedy-optimal | — | 0% | 0% | — |
+
+Planned difficulty spread (not simulated yet): careful's best-ending rate ~45% on Gentle, ~30% on Normal, ~15% on Hard.
+
+## 10. Simulation spec (for the coding agent)
+
+### 10.1 Build
+- Extend the existing simulator in `sim/`. Keep it seeded and deterministic. All numbers stay in `data/economy.yaml` (economy) and `data/policies.yaml` (player behaviour).
+- New or changed systems: regular clients and habits, fixed jobs, the loan and the parents' ending, endings, the new effects, categories, caps and synergies.
+- **Apply** from round 1's `data/economy.recommended.yaml` only `work_milestone_every: 8`. Don't apply the day-6 → day-4 invoice move or the starting cash of 1,450 (both superseded). Then delete the overlay file.
+
+### 10.2 Player strategies (policies)
+Keep the five policies and their definitions from round 1 (`data/policies.yaml`), with these changes:
+- All policies repay her loan as soon as cash allows (§6).
+- All policies take the day-1 job.
+- The story job is handled per variant (§10.3).
+- Update the effect-pick rules for the new pool (§8.5).
+- Don't change the policies' book hours to hit the book target. Tune H (§3.4) instead.
+
+### 10.3 Runs
+- **Starting-cash search first:** sweep 800–2,400 in steps of 100. Pick the value that best meets the §10.5 targets. Then **tune H** for careful's book-finish target, re-check starting cash once, and report both.
+- **Main runs:** 2,000 seeds per policy × {effects, no effects} × {story job always taken, story job declinable}.
+- **Sensitivity sweep** (±25%): starting cash, rent, random offer rate, regular-client job rate, regular-client terms (rate bonus, payment days), PE share, payment delays, late-payment share, story job size, effect sizes, book remaining hours H, leisure cap, loan repayment window (5 / 7 / 9 days), parents'-ending cash floor, transformation-bill odds. **Not NET** (fixed; one reference row only).
+
+### 10.4 Metrics
+- Ending tier distribution per policy; goal-by-goal success rates; the most common missed goal per policy.
+- Parents' ending rate and day; crisis rate; lifelines used; loan taken / repaid on time.
+- Lowest cash day (distribution) and value; end money value (cash, receivables, debts); finance tier (good / okay).
+- Stress: days > 70, average in days 36–42; illness days.
+- Relationship weeks missed; pet deficit days.
+- Book: milestones, finished, near-finished, hours.
+- Effects: held at end; offers by source; pick rates; share held in all runs vs. top decile; dead effects; synergy frequency; cap hits per category.
+- Regular clients: jobs per client per run; story job accepted (declinable variant).
+- Feedback cadence: job payments per week (day-1 job included; pre-move invoices excluded).
+
+### 10.5 Acceptance targets (Normal, with effects, story job declinable)
+
+| Area | Target |
+|---|---|
+| Endings | The §9.3 table (finishes book, best, good or better, parents' ending) |
+| Careful | Lowest cash in days 28–35 in ≥ 60% of runs |
+| Effects | Careful holds 7–9 at the end, grinder/careless 5–6 or the policy's natural count (report); no single effect in > 70% of top-decile runs for any policy; CAT tool picked 40–60% of the time when offered by careful; no dead effects (§8.5) |
+| Effect boost | Careful: average +10–20%, last 5 workdays +20–35% |
+| Feedback | Careful, book-heavy and grinder each get at least one **job** payment in each of weeks 1–6 in ≥ 90% of runs |
+| Story job | Accepted by careful in ≥ 70% of runs (declinable variant); if lower, report why |
+
+Also report the "always taken" variant against the same targets.
+
+### 10.6 Report
+- Rename the round-1 report to `sim/reports/SIM_REPORT_round1.md` (and its charts) before writing the new `sim/reports/SIM_REPORT.md`.
+- Same structure as round 1. Add:
+  - an **ending section**: tier distribution, goal rates, and the most common missed goal per policy;
+  - a **comparison with round 1** (what changed and why);
+  - the chosen starting cash, H and implied starting progress, and any CAT price change.
+- End with recommended config changes (as an overlay file, not merged), a re-run with them applied, and open issues needing owner decisions.
+
+## 11. Open items this spec does not settle
+
+- How taxes are shown (net pay, a tax jar or a tax bill).
+- Exact difficulty differences (Gentle / Hard): starting cash, late payments, loan window (5 days on Hard is decided).
+- Individual habits for regular clients beyond the baseline; more fixed story commissions.
+- Narrative content of events and endings; only their money/time/stress effects are modeled here.
 - Currency and city (numbers can be scaled uniformly).
 
 ## Sources for the grounding figures

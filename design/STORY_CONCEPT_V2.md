@@ -1,6 +1,6 @@
 # Paws & Paychecks — v2 concept (working notes)
 
-> Status: decisions so far for the longer, story-driven version. `GAME_DESIGN.md`, `TECH_SPEC.md` and `CLAUDE.md` describe the submitted class-assignment version (v1) and are kept for reference. Economy numbers and the simulation spec live in `SIM_BASELINE.md`.
+> Status: decisions so far for the longer, story-driven version. The v1 documents (`GAME_DESIGN.md`, `TECH_SPEC.md` and the v1 `CLAUDE.md`) describe the submitted class-assignment version and are not in this repo. Economy numbers and the simulation spec live in `SIM_BASELINE.md`; the reasons behind decisions are in `DECISIONS.md`.
 
 ## Decided
 
@@ -8,8 +8,8 @@
 - Narrative life sim + resource management + roguelike, **42 in-game days** (6 weeks).
 - Leaning toward **one turn = one day**, with uneven pacing (quick workdays, longer days off, fully played story days, occasional montage skips).
 - No instant-reaction gameplay; small interactions should express feeling rather than test skill.
-- Bankruptcy is possible.
-- The ending depends on the final state of stress, the relationship and the pet.
+- Bankruptcy is possible, but it doesn't end the run directly: it leads to the **parents' ending** if a loan from her isn't repaid in time (see "Endings").
+- **Endings come from five goals:** keep the pet, a good relationship with her, the book finished, low or medium stress, and a good financial situation. The best ending needs all five; the other four without the book is still a good ending (see "Endings").
 - The pet is an **invented creature**. It arrives very young and grows through stages during the game; its growth doesn't have to match any real animal.
 - Not necessarily web-only.
 - Tone: warm and honest, not complaining about the current state of the world.
@@ -22,7 +22,8 @@
 - **Roguelike effects:** effects such as working-efficiency modifiers are chosen by the player from **randomly offered** options; chances to pick come from a **mix** of sources (see "Roguelike effects").
 - **The financial system is designed first**, with time as the shared currency; stress, the relationship and the pet are coupled to it through time and efficiency rather than derived from money.
 - **Payment timing is compressed to game time** (roughly 2–14 days after delivery, sometimes late), with **one realistic long delay as a fixed story event** landing in the convergence week. Feedback on finished work comes **at delivery** (client reply, reputation, a visible "money owed" list); cash comes later.
-- **The book starts with progress already made** (the character has been translating it for months); what remains are the hard parts, sized to take roughly 60–80 hours of in-game work.
+- **The book starts with progress already made** (the character has been translating it for months); what remains are the hard parts. Its size is set by the ending targets and varies only a little between runs; it pays **no advance** during the run.
+- **Clients:** most are types; **three regular clients** have their own habits, slightly better terms, and fixed story commissions. A **fixed small job on day 1** opens the run, and the **week-2 story job** is a choice that is hard to refuse.
 
 ## Premise
 
@@ -104,8 +105,10 @@ Four entangled lines: **the pet's growth**, **the character's career**, **money*
 - **Self-initiated, or in between** (e.g. a small contract the character fought for, with a modest advance that doesn't cover the real time it takes). Not a fully commissioned job.
 - **Starts with progress already made:** the character has been translating it in spare time for months, since before the move. The existing pages anchor the character's voice and partly explain why they chose translation without stating it.
 - **What remains are the hard parts:** the chapters the character kept putting off. This justifies a slower, more careful pace (choosing words and phrases) and gives the in-game work emotional weight. Starting progress and which chapters remain can vary per run.
-- **Time budget:** finishing should take roughly **60–80 hours** of in-game work, about a quarter to a third of a careful player's working time: a real sacrifice, but doable.
-- Its milestones mainly help **stress relief and emotional state**, not money, because that's closer to reality. Working on it is a choice that costs time and paid work but restores the character.
+- **Time budget:** finishing should be a real sacrifice, but doable. Its size is tuned so that a balanced (careful) player finishes in about 40–50% of runs; the starting progress varies only a little between runs, so finishing depends on choices, not dice.
+- **Near-finished:** if the last part is at least half done, the ending can say the book was finished a month later. That counts toward the good ending, not the best one.
+- **No advance:** the book pays nothing during the run (an advance made book-focused play almost risk-free in the simulation).
+- Its milestones mainly help **stress relief and emotional state**, not money, because that's closer to reality. Only a few effects (e.g. deep focus, old margin notes, reading aloud) change how fast the book goes. Working on it is a choice that costs time and paid work but restores the character.
 
 ### Reading aloud to the creature ⭐ (keep this)
 - The character tries out translated passages by **reading them aloud to the creature**.
@@ -122,9 +125,34 @@ Four entangled lines: **the pet's growth**, **the character's career**, **money*
 - The character is a **freelance translator**: they can stay home and care for the creature, but they have to choose which jobs to take.
 - There's no regular salary. Payment arrives **after a job is finished**, and sometimes **late**.
 - **Payment timing is compressed to game time:** direct clients pay within a few days, standard agencies in about a week, slow agencies in about two weeks; some payments run late. One large agency job taken in week 2 is paid only in week 5, as a fixed story event.
+- **Clients:** most clients are types (direct, standard agency, slow agency). **Three regular clients** are special: slightly better pay or faster payment, their own habits (e.g. usually sends something on Mondays), reputation that counts more, and one or two **fixed story commissions** on set days. Their other work arrives randomly but follows their habit, so players can learn and plan around it.
+- **Day 1:** a fixed small job from the regular direct client opens the run and doubles as the tutorial; it pays around day 4.
+- **The week-2 story job** comes from the regular agency and is a choice that is hard to refuse; declining is allowed but hurts that client relationship.
+- **Rush jobs** pay more but have short deadlines and a higher stress cost.
+- **Taxes** are a fixed 22% of payments; how they are shown (net pay, a tax jar or a tax bill) is still open.
 - **Feedback comes at delivery:** the client's reply, a reputation change, and the invoice appearing in a visible "money owed" list with its expected date. Cash comes later.
 - The player has to manage how long each job is expected to take against when bills are due.
 - Small paid jobs (hours to a few days) keep money moving; the character's own book project mostly doesn't pay (see above).
+
+## Endings
+
+### The five goals
+1. **Keep the pet** (the creature is well cared for).
+2. **A good relationship with her** (not ignoring her too much; any loan from her repaid on time).
+3. **The book finished.**
+4. **Low or medium stress.**
+5. **A good financial situation:** not in the parents' ending, no debt left, and about a month's rent of safety. "Okay" = solvent but below that.
+
+### Tiers
+- **Best:** all five goals.
+- **Good:** goals 1, 2, 4 and 5 without the book (a near-finished book can be "finished a month later").
+- **Mixed / hard:** fewer goals met; which goals are missed shapes the ending's story.
+- **The parents' ending:** borrowing from her raises the character's stress sharply. If the loan isn't repaid within 7 days (Normal; 5 on Hard), the character's parents call and help, and the run ends. It is warm, not a punishment.
+
+### Targets
+- A balanced player should reach the best ending in roughly a quarter to a third of runs, and a good ending or better in most runs.
+- A player who commits to the book reaches the best ending more often, but risks the parents' ending.
+- Exact targets per strategy are in `SIM_BASELINE.md` §9.
 
 ## Meters and visibility
 
@@ -134,7 +162,7 @@ Four entangled lines: **the pet's growth**, **the character's career**, **money*
 
 ## Event system
 
-- **Fixed important events:** story beats on set days (e.g. the opening confession, growth stages, rent day, the long-delayed payment, the convergence week, day 42).
+- **Fixed important events:** story beats on set days (e.g. the opening confession, the day-1 job, growth stages, the week-2 story job, rent day, the long-delayed payment, the convergence week, day 42).
 - **Random events by stage:** drawn from pools tied to the stage the player is in.
 - **Callbacks:** some choices schedule later events (e.g. a promise made now comes due days later). **Everyday moments can plant callbacks too**, as in real life (e.g. a neighbor chatted with early on turns out to matter later).
 - **Choices that depend on history:** the options offered in an event can change according to choices the player has already made.
@@ -143,7 +171,9 @@ Four entangled lines: **the pet's growth**, **the character's career**, **money*
 
 ## Open questions
 
-- Whether the book project is fully self-initiated or has a small contract/advance.
+- Whether the book project is fully self-initiated or under a small contract (either way, no advance is paid during the run).
+- How taxes are shown (net pay, a tax jar or a tax bill).
+- Regular clients' individual habits and further fixed story commissions.
 - Why the character and partner live apart.
 - How stress visibility maps to difficulty levels.
 - Remaining event system details (see above).
