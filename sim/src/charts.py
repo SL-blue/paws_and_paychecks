@@ -1,6 +1,7 @@
 """Report charts (matplotlib, PNG): cash over time and the lowest-cash day, per policy.
 
 Small multiples, one policy per panel, one hue: identity comes from the panel title, not color.
+Runs that end early (the parents' ending) drop out of the percentiles from their last day on.
 """
 import matplotlib
 
@@ -27,9 +28,12 @@ def _style(ax):
 def cash_over_time(runs_by_policy, path, title):
     fig, axes = plt.subplots(1, len(runs_by_policy), figsize=(3.2 * len(runs_by_policy), 3.0), sharey=True)
     for ax, (policy, runs) in zip(axes, runs_by_policy.items()):
-        series = np.array([r["cash_series"] for r in runs])
-        days = np.arange(1, series.shape[1] + 1)
-        p10, p50, p90 = (np.percentile(series, q, axis=0) for q in (10, 50, 90))
+        length = max(len(r["cash_series"]) for r in runs)
+        series = np.full((len(runs), length), np.nan)
+        for i, r in enumerate(runs):
+            series[i, :len(r["cash_series"])] = r["cash_series"]
+        days = np.arange(1, length + 1)
+        p10, p50, p90 = (np.nanpercentile(series, q, axis=0) for q in (10, 50, 90))
         ax.fill_between(days, p10, p90, color=BAND, linewidth=0, label="10th-90th percentile")
         ax.plot(days, p50, color=BLUE, linewidth=2, label="median")
         ax.axhline(0, color=MUTED, linewidth=0.8)

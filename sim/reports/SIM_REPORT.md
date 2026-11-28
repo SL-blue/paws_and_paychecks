@@ -1,534 +1,725 @@
-# Paws & Paychecks: economy simulation report
+# Paws & Paychecks: economy simulation report — round 2 (spec v0.3)
 
-This report covers the economy simulation specified in `design/SIM_BASELINE.md` §9 (v0.2): five player
-policies × {with effects, no effects} × {book unpaid, small advance}, a starting-cash search, a ±25% sensitivity
-sweep, and a re-run with recommended config changes. Numbers come from `data/economy.yaml`. Player behaviour comes
-from `data/policies.yaml`. Interpretation choices for ambiguous parts of the spec are listed in §8.
+This report covers round 2 of the economy simulation, specified in `design/SIM_BASELINE.md` §10 (v0.3).
+- **What ran:** five policies × {with effects, no effects} × {story job declinable, story job always taken}; the
+  starting-cash search, H tuning and CAT-price check; a sensitivity sweep; and a re-run with recommended config
+  changes.
+- **What's new in v0.3:** regular clients A/B/C, the fixed day-1 and story jobs, her loan and the parents' ending,
+  the five ending goals, and the 36-effect pool with caps and synergies.
+- **Where things live:** economy numbers in `data/economy.yaml`, player behaviour in `data/policies.yaml`.
+  Interpretation choices for ambiguous parts of the spec are in §11.
 
 **Headlines**
-- **Starting cash of $1,400 meets 4 of the 5 cash-sensitive targets.** Careful's lowest cash lands in days 28–35
-  in 58% of runs (target 60%). The other low point is day 5: week-1 bills arrive before the first pre-move invoice.
-- **The economy separates the strategies as intended.** Careful is safe (1% bankrupt). Book-heavy is risky but
-  viable (27%). Careless fails (76%). Grinding is financially safe (1%) but costs stress, the relationship and the
-  pet. Greedy-optimal earns about 2× careful but never reaches a good combined ending.
-- **Two targets fail for structural reasons, not tuning reasons.**
-  1. Effects: the offer pool is too small. Every engaged policy ends up holding nearly the whole pool, so the same
-     effects appear in 100% of top-decile runs.
-  2. Feedback: work done in week 1 can't pay in week 1 under 7-day agency terms. The target is met only if the
-     pre-move invoices count.
-- **NET (tax share) is by far the strongest lever**, then rent, starting cash and offer rate. **The book advance
-  variant is a large balance decision:** it cuts book-heavy bankruptcy from 27% to 1%.
-- **Recommended:** move the day-6 pre-move invoice to day 4, offer a work-milestone effect every 8th job instead of
-  every 4th, and set starting cash to $1,450. With these, all policy targets are met except book-heavy at 30.2%
-  bankrupt (ceiling 30%; within sampling noise, but reported as a miss). The two structural failures remain and
-  need owner decisions (§8).
+- **Tuned values:** starting cash **$1,900**, book **H = 67.5 h** (implied starting progress ~69%), CAT tool
+  **$55/week**. The main variant meets **16 of 31** targets. Grinder, careless and greedy-optimal meet all their
+  ending rows except careless's parents' rate. Careful's book-finish and low-point targets are met. So are the CAT
+  pick rate and the story-job acceptance.
+- **The ending targets can't all be met together, by any tuning.** Three reasons, each needing an owner decision (§11):
+  1. **Careful meets the four non-book goals in every run.** Its stress stays near 0 under the spec's stress
+     numbers, and it meets her and the pet by definition. So careful's best rate equals its book-finish rate
+     (49% vs 25–35%), and good-or-better is 100% (vs 70–80%).
+  2. **Book-heavy finishes the book in 100% of runs at any H from 50 to 80 h.** It plans ~117 book hours. Its
+     85–95% finish target, and good-or-better being above best, can't come from H.
+  3. **Money pulls the targets apart.** Book-heavy's best (45–55%) needs half its runs to end with ≥ $1,500, which
+     takes high starting cash. Careless's parents' ending (≥ 60%) and book-heavy's (15–30%) need low cash. At
+     $1,900, careless reaches the parents' ending in only 6% of runs and book-heavy in 0%.
+- **Effects are smaller, as intended.** Careful's effect boost is +8% on average and +12% at the end (targets
+  +10–20% and +20–35%). Careful holds 10.5 effects (target 7–9). The 36-effect pool fixes round 1's sameness:
+  except the Saturday class, no effect is in more than 70% of any policy's top decile.
+- **Feedback improves** a lot over round 1 (careful 41% → 73% of runs with a job payment every week). It still
+  misses 90%: the story job fills weeks 2–4 and pays on day 33.
+- **Strongest levers:** H (careful's book finish 95% → 0% over ±25%), starting cash, rent, effect sizes. The loan
+  window, the parents' floor and the late-payment share barely matter at the tuned cash.
+- **Recommended overlay (§10):** a parents' floor of −$100 and a $400 loan cap; work-milestone offers every 12th
+  job; Saturday-class income cut to $60; the neighbor made free; starting cash $2,000. Result: **17 of 31** met.
+  The overlay fixes the top-decile target and the dead neighbor, and lifts careless's parents' ending to 17%.
+  It doesn't touch the structural conflicts above.
 
-Reproduce with `python -m sim.run --all` (2,000 seeds per policy and variant; deterministic per (config, policy, seed)).
+Reproduce with `python -m sim.run --all` (2,000 seeds per policy and variant; deterministic per (config, policy, seed)). Round 1 is archived in `SIM_REPORT_round1.md`.
 
-Sections: 1 Starting cash · 2 Summary per policy · 3 Acceptance targets · 4 Charts · 5 Effects · 6 Sensitivity ·
-7 Recommended changes and re-run · 8 Open issues
+Sections: 1 Tuning · 2 Endings · 3 Money, stress, time · 4 Acceptance targets · 5 Charts · 6 Effects ·
+7 Regular clients and the story job · 8 Sensitivity · 9 Comparison with round 1 · 10 Recommended changes and
+re-run · 11 Open issues
 
-## 1. Starting cash
+## 1. Tuning: starting cash, book hours H, CAT price
 
-**Chosen starting cash (after day-1 rent): $1,400.** Pre-move receivables are unchanged (600 / 900 / 500 on days 6 / 13 / 24).
+- **Starting cash (after day-1 rent): $1,900** (first pass: $1,900).
+- **Book: H = 67.5 hours** of hard chapters left (±5% per run: 64.1–70.9 h), 10,125 words at 150 w/h. With a whole book of 215 h (sim choice), the implied starting progress is **69%** (67%–70%).
+- **CAT tool: $55/week** (unchanged).
 
-The search ran every policy with effects and the unpaid book, 2,000 seeds per point. A value scores by how many of the five cash-sensitive targets it meets, then by the total distance to the ones it misses, then by how close book-heavy bankruptcy is to the middle of its 15-30% band.
+Order (§10.3): starting-cash search → tune H for careful's book target → CAT-price check → re-check starting cash once. Each point runs the four player policies, with effects and the story job declinable, 2,000 seeds. A cash value scores by how many of the §9.3 ending targets (book-finish rows excluded, H sets those) plus careful's low-point target it meets, then by the total distance to the missed ones, then the lower cash.
 
-| Start cash | Careful bankrupt (<=8%) | Careful low in d28-35 (>=60%) | Book-heavy bankrupt (15-30%) | Grinder bankrupt (<=5%) | Careless bankrupt (>=60%) | Met | Distance |
+### Starting-cash search, first pass (H and CAT price from the config file)
+
+| Start cash | Careful parents (<=8%) | Careful best (25-35%) | Careful good+ (70-80%) | Careful low d28-35 (>=60%) | Book-heavy parents (15-30%) | Book-heavy best (45-55%) | Book-heavy good+ (60-70%) | Grinder parents (<=5%) | Careless parents (>=60%) | Met | Distance |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 800 | 0% | 33% | 84% | 77% | 7% | 1% | 1% | 9% | 53% | 7/13 | 1.264 |
+| 900 | 0% | 36% | 89% | 77% | 4% | 1% | 1% | 10% | 43% | 6/13 | 1.458 |
+| 1,000 | 0% | 38% | 92% | 77% | 3% | 2% | 2% | 4% | 34% | 7/13 | 1.554 |
+| 1,100 | 0% | 40% | 94% | 76% | 2% | 4% | 4% | 1% | 29% | 7/13 | 1.607 |
+| 1,200 | 0% | 41% | 96% | 76% | 1% | 6% | 6% | 1% | 24% | 7/13 | 1.638 |
+| 1,300 | 0% | 42% | 98% | 76% | 1% | 10% | 10% | 0% | 19% | 7/13 | 1.656 |
+| 1,400 | 0% | 43% | 99% | 76% | 0% | 13% | 13% | 0% | 15% | 7/13 | 1.649 |
+| 1,500 | 0% | 48% | 99% | 67% | 0% | 18% | 18% | 0% | 12% | 7/13 | 1.630 |
+| 1,600 | 0% | 49% | 100% | 67% | 0% | 25% | 25% | 0% | 10% | 7/13 | 1.533 |
+| 1,700 | 0% | 49% | 100% | 67% | 0% | 34% | 34% | 0% | 8% | 7/13 | 1.383 |
+| 1,800 | 0% | 49% | 100% | 67% | 0% | 46% | 46% | 0% | 7% | 8/13 | 1.159 |
+| 1,900 **(chosen)** | 0% | 49% | 100% | 67% | 0% | 55% | 55% | 0% | 6% | 8/13 | 1.079 |
+| 2,000 | 0% | 49% | 100% | 67% | 0% | 63% | 63% | 0% | 5% | 8/13 | 1.122 |
+| 2,100 | 0% | 49% | 100% | 67% | 0% | 71% | 71% | 0% | 4% | 7/13 | 1.210 |
+| 2,200 | 0% | 49% | 100% | 67% | 0% | 78% | 78% | 0% | 3% | 7/13 | 1.365 |
+| 2,300 | 0% | 49% | 100% | 67% | 0% | 84% | 84% | 0% | 2% | 7/13 | 1.503 |
+| 2,400 | 0% | 49% | 100% | 67% | 0% | 89% | 89% | 0% | 2% | 7/13 | 1.597 |
+
+### H search (starting cash $1,900); target: careful finishes ~40–50% (aim 45%)
+
+| H (hours) | Careful finishes | Careful near-finished | Careful best | Careful good+ | Book-heavy finishes | Book-heavy best | Book-heavy parents |
 |---|---|---|---|---|---|---|---|
-| 800 | 7% | 59% | 68% | 23% | 96% | 2/5 | 0.573 |
-| 1,000 | 4% | 59% | 53% | 7% | 92% | 2/5 | 0.265 |
-| 1,200 | 2% | 59% | 39% | 3% | 85% | 3/5 | 0.104 |
-| 1,400 **(chosen)** | 1% | 58% | 26% | 1% | 76% | 4/5 | 0.018 |
-| 1,600 | 0% | 50% | 16% | 0% | 64% | 4/5 | 0.100 |
-| 1,800 | 0% | 50% | 8% | 0% | 49% | 2/5 | 0.282 |
-| 2,000 | 0% | 50% | 4% | 0% | 36% | 2/5 | 0.453 |
-| 2,200 | 0% | 50% | 2% | 0% | 23% | 2/5 | 0.601 |
-| 2,400 | 0% | 50% | 1% | 0% | 14% | 2/5 | 0.704 |
+| 50 | 96% | 4% | 96% | 100% | 100% | 59% | 0% |
+| 52.5 | 92% | 8% | 92% | 100% | 100% | 58% | 0% |
+| 55 | 88% | 12% | 88% | 100% | 100% | 57% | 0% |
+| 57.5 | 82% | 16% | 82% | 100% | 100% | 56% | 0% |
+| 60 | 77% | 18% | 77% | 100% | 100% | 56% | 0% |
+| 62.5 | 72% | 21% | 72% | 100% | 100% | 56% | 0% |
+| 65 | 64% | 25% | 64% | 100% | 100% | 55% | 0% |
+| 67.5 **(chosen)** | 49% | 37% | 49% | 100% | 100% | 55% | 0% |
+| 70 | 31% | 49% | 31% | 100% | 100% | 54% | 0% |
+| 72.5 | 17% | 59% | 17% | 100% | 100% | 54% | 0% |
+| 75 | 7% | 65% | 7% | 100% | 100% | 54% | 0% |
+| 77.5 | 2% | 64% | 2% | 100% | 100% | 53% | 0% |
+| 80 | 0% | 54% | 0% | 100% | 100% | 52% | 0% |
 
-**Why $1,400.** It is the only value that meets four of the five cash-sensitive targets with the smallest miss
-(careful's low-point share, 58% vs. 60%). The usable window is narrow:
-- Below $1,400, book-heavy goes over 30% bankrupt (39% at $1,200).
-- Above $1,600, careless drops under 60% bankrupt, so carelessness stops being punished.
+### CAT-tool price check; target: careful picks it 40–60% of the time when offered
 
-Careful's low-point share **does not improve with more cash**. That share depends on *when* the low comes, not how
-low it is. Above $1,500 the careful policy also buys headphones on day 1, which deepens the week-1 dip. This is
-the reason for the recommended invoice move in §7 rather than a cash change. The spec expected ~1,200–1,600; the
-result is inside that range.
+| Price/week | Careful pick rate |
+|---|---|
+| $30 | 82% |
+| $35 | 77% |
+| $40 | 76% |
+| $45 | 72% |
+| $50 | 63% |
+| $55 **(chosen)** | 45% |
+| $60 | 39% |
+| $65 | 36% |
+| $70 | 31% |
+| $75 | 17% |
+| $80 | 5% |
+| $85 | 5% |
+| $90 | 3% |
+| $95 | 1% |
+| $100 | 0% |
 
-## 2. Summary per policy
+### Starting-cash re-check (H = 67.5, CAT $55/week)
 
-All values are means or shares over runs unless marked median. "End value" = cash + 0.9 x receivables - debts. "Good combined ending" = not bankrupt, <= 1 relationship week missed, <= 4 pet-care deficit days, <= 6 days with stress > 70 (simulator definition, see Open issues). *Greedy-optimal is search-based and reads the run's future offers.
+| Start cash | Careful parents (<=8%) | Careful best (25-35%) | Careful good+ (70-80%) | Careful low d28-35 (>=60%) | Book-heavy parents (15-30%) | Book-heavy best (45-55%) | Book-heavy good+ (60-70%) | Grinder parents (<=5%) | Careless parents (>=60%) | Met | Distance |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 800 | 0% | 33% | 84% | 77% | 7% | 1% | 1% | 9% | 53% | 7/13 | 1.264 |
+| 900 | 0% | 36% | 89% | 77% | 4% | 1% | 1% | 10% | 43% | 6/13 | 1.458 |
+| 1,000 | 0% | 38% | 92% | 77% | 3% | 2% | 2% | 4% | 34% | 7/13 | 1.554 |
+| 1,100 | 0% | 40% | 94% | 76% | 2% | 4% | 4% | 1% | 29% | 7/13 | 1.607 |
+| 1,200 | 0% | 41% | 96% | 76% | 1% | 6% | 6% | 1% | 24% | 7/13 | 1.638 |
+| 1,300 | 0% | 42% | 98% | 76% | 1% | 10% | 10% | 0% | 19% | 7/13 | 1.656 |
+| 1,400 | 0% | 43% | 99% | 76% | 0% | 13% | 13% | 0% | 15% | 7/13 | 1.649 |
+| 1,500 | 0% | 48% | 99% | 67% | 0% | 18% | 18% | 0% | 12% | 7/13 | 1.630 |
+| 1,600 | 0% | 49% | 100% | 67% | 0% | 25% | 25% | 0% | 10% | 7/13 | 1.533 |
+| 1,700 | 0% | 49% | 100% | 67% | 0% | 34% | 34% | 0% | 8% | 7/13 | 1.383 |
+| 1,800 | 0% | 49% | 100% | 67% | 0% | 46% | 46% | 0% | 7% | 8/13 | 1.159 |
+| 1,900 **(chosen)** | 0% | 49% | 100% | 67% | 0% | 55% | 55% | 0% | 6% | 8/13 | 1.079 |
+| 2,000 | 0% | 49% | 100% | 67% | 0% | 63% | 63% | 0% | 5% | 8/13 | 1.122 |
+| 2,100 | 0% | 49% | 100% | 67% | 0% | 71% | 71% | 0% | 4% | 7/13 | 1.210 |
+| 2,200 | 0% | 49% | 100% | 67% | 0% | 78% | 78% | 0% | 3% | 7/13 | 1.365 |
+| 2,300 | 0% | 49% | 100% | 67% | 0% | 84% | 84% | 0% | 2% | 7/13 | 1.503 |
+| 2,400 | 0% | 49% | 100% | 67% | 0% | 89% | 89% | 0% | 2% | 7/13 | 1.597 |
 
-### With effects, book unpaid
+**Reading the searches**
+- **Starting cash.** Most cash-sensitive rows don't move with cash: careful's parents' rate is 0% everywhere, and
+  grinder and careless always meet their tier rows. What does move is a trade-off:
+  - book-heavy's best ending: 0% at $800 → 55% at $1,900 → 86% at $2,400;
+  - careless's parents' ending: ~50% at $800 → 6% at $1,900.
 
-| Policy | Bankrupt | Crisis | Lifelines used | Lowest cash (median) | Low in d28-35 | End value median (p10 / p90) | Days stress>70 | Stress>70 share wk4-5 | Illness days | Rel. weeks missed | Pet deficit days | Book milestones | Book finished | Book hours | Effects held | Paid hours | Jobs done | Jobs late | Good combined ending |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| Careful | 1% | 27% | 0.29 | 405 | 58% | 2,625 (1,895 / 3,392) | 0.0 | 0% | 0.00 | 0.0 | 0.0 | 2.63 | 63% | 65 | 11.0 | 181 | 24.1 | 0.0 | 99% |
-| Book-heavy | 26% | 76% | 1.19 | -275 | 58% | 737 (88 / 1,350) | 0.0 | 0% | 0.00 | 0.0 | 0.0 | 3.00 | 100% | 67 | 10.9 | 117 | 19.2 | 0.1 | 74% |
-| Grinder | 1% | 16% | 0.18 | 388 | 28% | 3,290 (2,064 / 4,974) | 22.2 | 80% | 2.08 | 5.4 | 16.9 | 0.00 | 0% | 0 | 11.7 | 345 | 24.3 | 0.9 | 0% |
-| Careless | 76% | 97% | 1.48 | -963 | 40% | -104 (-852 / 626) | 0.0 | 0% | 0.00 | 4.4 | 16.8 | 0.12 | 0% | 17 | 9.8 | 157 | 14.6 | 8.7 | 0% |
-| Greedy-optimal* | 0% | 7% | 0.08 | 361 | 8% | 5,690 (3,915 / 7,361) | 1.5 | 5% | 0.04 | 6.0 | 42.0 | 0.00 | 0% | 0 | 11.0 | 331 | 29.0 | 0.1 | 0% |
+  $1,900 is where book-heavy's best enters its band. That gains one more target than any lower value, so the
+  search picks it. **Lower cash would be the right choice if punishing carelessness matters more than book-heavy's
+  best ending.** The search can't make that call; it's in §11.
+- **H.** Careful's finish rate is steep in H: 69% at 62.5 h, 49% at 67.5 h, 30% at 70 h. ±5% per-run variation
+  plus the effects' book bonuses make it a cliff, not a slope. Players near the cliff end "near-finished" (37% of
+  careful runs at 67.5 h), which counts toward the good ending.
+- **H vs. story text.** The implied starting progress (~69%) assumes a 215-hour book. That number only exists for
+  the story text; any other total scales it.
+- **CAT tool.** At $60 careful picks it 39% of the time; at $55, 45%. The pick rate depends on the policies'
+  hand-set value weights (§6), so read it as "about $55–60 is the balance point for a careful player", not as a
+  measured player behaviour.
 
-### With effects, book small advance
+## 2. Endings
 
-| Policy | Bankrupt | Crisis | Lifelines used | Lowest cash (median) | Low in d28-35 | End value median (p10 / p90) | Days stress>70 | Stress>70 share wk4-5 | Illness days | Rel. weeks missed | Pet deficit days | Book milestones | Book finished | Book hours | Effects held | Paid hours | Jobs done | Jobs late | Good combined ending |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| Careful | 0% | 6% | 0.06 | 623 | 29% | 3,469 (2,688 / 4,236) | 0.0 | 0% | 0.00 | 0.0 | 0.0 | 2.63 | 63% | 65 | 11.0 | 181 | 24.1 | 0.0 | 100% |
-| Book-heavy | 1% | 14% | 0.17 | 508 | 38% | 1,715 (1,069 / 2,328) | 0.0 | 0% | 0.00 | 0.0 | 0.0 | 3.00 | 100% | 67 | 11.0 | 117 | 19.2 | 0.1 | 99% |
-| Grinder | 1% | 16% | 0.18 | 388 | 28% | 3,290 (2,064 / 4,974) | 22.2 | 80% | 2.08 | 5.4 | 16.9 | 0.00 | 0% | 0 | 11.7 | 345 | 24.3 | 0.9 | 0% |
-| Careless | 74% | 97% | 1.47 | -952 | 41% | -54 (-843 / 683) | 0.0 | 0% | 0.00 | 4.4 | 16.8 | 0.12 | 0% | 17 | 9.8 | 157 | 14.6 | 8.7 | 0% |
-| Greedy-optimal* | 0% | 7% | 0.08 | 361 | 8% | 5,690 (3,915 / 7,361) | 1.5 | 5% | 0.04 | 6.0 | 42.0 | 0.00 | 0% | 0 | 11.0 | 331 | 29.0 | 0.1 | 0% |
+Tier shares of all runs; goal rates over all runs (a parents' run is measured up to its last day). "Most missed" counts runs that did not end with the parents. *Greedy-optimal is search-based and reads the run's future offers.
 
-### No effects (control), book unpaid
+### With effects, story job declinable (main)
 
-| Policy | Bankrupt | Crisis | Lifelines used | Lowest cash (median) | Low in d28-35 | End value median (p10 / p90) | Days stress>70 | Stress>70 share wk4-5 | Illness days | Rel. weeks missed | Pet deficit days | Book milestones | Book finished | Book hours | Effects held | Paid hours | Jobs done | Jobs late | Good combined ending |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| Careful | 5% | 46% | 0.62 | 53 | 62% | 1,667 (1,030 / 2,323) | 0.0 | 0% | 0.00 | 0.0 | 0.0 | 2.23 | 23% | 64 | 0.0 | 179 | 17.6 | 0.2 | 95% |
-| Book-heavy | 51% | 87% | 1.45 | -497 | 43% | 236 (-354 / 794) | 0.0 | 0% | 0.00 | 0.0 | 0.0 | 3.00 | 100% | 71 | 0.0 | 114 | 14.8 | 0.5 | 49% |
-| Grinder | 2% | 22% | 0.28 | 461 | 44% | 1,992 (991 / 3,020) | 22.5 | 83% | 2.23 | 5.2 | 16.9 | 0.00 | 0% | 0 | 0.0 | 350 | 17.3 | 2.0 | 0% |
-| Careless | 80% | 98% | 1.36 | -948 | 31% | -270 (-941 / 371) | 0.0 | 0% | 0.00 | 4.4 | 16.8 | 0.04 | 0% | 17 | 0.0 | 157 | 12.1 | 7.3 | 0% |
-| Greedy-optimal* | 1% | 10% | 0.12 | 515 | 21% | 4,132 (2,950 / 5,331) | 2.6 | 9% | 0.11 | 6.0 | 42.0 | 0.00 | 0% | 0 | 0.0 | 333 | 21.6 | 0.3 | 0% |
+| Policy | Best | Good | Mixed | Hard | Parents | Good or better | Goal: pet | Goal: relationship | Goal: book | Goal: stress | Goal: finances | Most missed goal (share of all runs) | Book near-finished |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Careful | 49% | 51% | 0% | 0% | 0% | 100% | 100% | 100% | 49% | 100% | 100% | book (51%) | 37% |
+| Book-heavy | 55% | 0% | 45% | 0% | 0% | 55% | 100% | 100% | 100% | 100% | 55% | finances (45%) | 0% |
+| Grinder | 0% | 0% | 0% | 100% | 0% | 0% | 0% | 0% | 0% | 82% | 100% | book (100%) | 0% |
+| Careless | 0% | 0% | 0% | 94% | 6% | 0% | 0% | 0% | 0% | 100% | 4% | book (94%) | 0% |
+| Greedy-optimal* | 0% | 0% | 0% | 100% | 0% | 0% | 0% | 0% | 0% | 82% | 100% | book (100%) | 0% |
 
-### No effects (control), book small advance
+### With effects, story job always taken
 
-| Policy | Bankrupt | Crisis | Lifelines used | Lowest cash (median) | Low in d28-35 | End value median (p10 / p90) | Days stress>70 | Stress>70 share wk4-5 | Illness days | Rel. weeks missed | Pet deficit days | Book milestones | Book finished | Book hours | Effects held | Paid hours | Jobs done | Jobs late | Good combined ending |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| Careful | 1% | 15% | 0.17 | 533 | 46% | 2,385 (1,724 / 3,068) | 0.0 | 0% | 0.00 | 0.0 | 0.0 | 2.23 | 23% | 64 | 0.0 | 179 | 17.6 | 0.2 | 99% |
-| Book-heavy | 4% | 24% | 0.33 | 345 | 38% | 1,214 (628 / 1,762) | 0.0 | 0% | 0.00 | 0.0 | 0.0 | 3.00 | 100% | 71 | 0.0 | 114 | 14.8 | 0.5 | 96% |
-| Grinder | 2% | 22% | 0.28 | 461 | 44% | 1,992 (991 / 3,020) | 22.5 | 83% | 2.23 | 5.2 | 16.9 | 0.00 | 0% | 0 | 0.0 | 350 | 17.3 | 2.0 | 0% |
-| Careless | 79% | 98% | 1.36 | -942 | 31% | -258 (-926 / 393) | 0.0 | 0% | 0.00 | 4.4 | 16.8 | 0.04 | 0% | 17 | 0.0 | 157 | 12.1 | 7.3 | 0% |
-| Greedy-optimal* | 1% | 10% | 0.12 | 515 | 21% | 4,132 (2,950 / 5,331) | 2.6 | 9% | 0.11 | 6.0 | 42.0 | 0.00 | 0% | 0 | 0.0 | 333 | 21.6 | 0.3 | 0% |
+| Policy | Best | Good | Mixed | Hard | Parents | Good or better | Goal: pet | Goal: relationship | Goal: book | Goal: stress | Goal: finances | Most missed goal (share of all runs) | Book near-finished |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Careful | 40% | 60% | 0% | 0% | 0% | 100% | 100% | 100% | 40% | 100% | 100% | book (60%) | 35% |
+| Book-heavy | 59% | 0% | 41% | 0% | 0% | 59% | 100% | 100% | 100% | 100% | 59% | finances (41%) | 0% |
+| Grinder | 0% | 0% | 0% | 100% | 0% | 0% | 0% | 0% | 0% | 80% | 100% | book (100%) | 0% |
+| Careless | 0% | 0% | 0% | 94% | 6% | 0% | 0% | 0% | 0% | 100% | 4% | book (94%) | 0% |
+| Greedy-optimal* | 0% | 0% | 0% | 100% | 0% | 0% | 0% | 0% | 0% | 84% | 100% | book (100%) | 0% |
 
-**Reading the table**
-- **Effects matter a lot.** For careful they lift median end value from $1,667 to $2,625. They raise "book
-  finished" from 23% to 63%, because efficiency bonuses also speed up book hours. With effects off, careful's
-  bankruptcy rises from 1% to 5% and book-heavy's from 27% to 51%.
-- **Grinder vs. careful.** The grinder works ~90% more paid hours than careful (345 h vs. 181 h) but ends only
-  ~25% richer (median $3,290 vs. $2,625). Stress above 50 costs efficiency, and the grinder misses deadlines (0.9 late jobs per run).
-  The stress→efficiency coupling works as designed: grinding pays a little, and costs a lot elsewhere.
-- **Greedy-optimal is a heuristic search, not a true optimum.** It reaches ~$5,700 by taking the best-paying
-  offers with full knowledge of future offers. It works 10–12 h days, spends no time with her and only 1 h/day on
-  the pet. **The money system gives it no reason not to.** The only money cost of neglect is a higher pet bill.
-  This is by design (relationship and pet are not derived from money), so the ending has to carry that cost.
-- **The book advance** ($400 gross per milestone) mostly helps the book-heavy player: bankruptcy falls 27% → 1%,
-  which makes book-heavy safer than the target band intends. Even at $800 starting cash (the bottom of the search
-  range), book-heavy with the advance is only 12% bankrupt (checked separately, 2,000 seeds). The advance and the
-  starting cash should be decided together.
-- **The week-2 story job** (12,500 words, paid day 33) is accepted in only ~48% of careful runs and ~22% of
-  book-heavy runs. Their schedules are often too full on day 8. See Open issues.
+**Reading the tables**
+- **Careful** never misses the pet, relationship, stress or finance goal. It meets her and the pet by
+  definition, and its stress stays near 0 (average over days 36–42: 0). Every careful run is best or good,
+  split by the book alone.
+- **Book-heavy** always finishes the book. Its ending is decided by money: best when the end value is ≥ $1,500
+  (55%), mixed otherwise. It never reaches the parents' ending at this cash. When it runs short (46% of runs
+  have a crisis), rent-late and early payment cover the gap. The late crisis comes when deferred rent falls due
+  on day 38. A loan taken then is due after day 42, so it can't trigger the parents' ending.
+- **Grinder and greedy-optimal** miss the pet and relationship goals in every run, so they are always "hard".
+  The money system still pays them most: greedy's median end value is ~$5,500, grinder's ~$6,100. As in round 1,
+  neglect is punished by the ending, not by money.
+- **Careless** misses everything but stress. Mostly "hard"; the parents' ending in 6%.
+- **Story job always taken vs. declinable:**
+  - careful's best falls 49% → 40% (the extra job takes book time);
+  - book-heavy's best rises 55% → 59% (the extra $1,000 net improves its finances);
+  - otherwise the same.
 
-### Feedback cadence (with effects, book unpaid)
+## 3. Money, stress, time: summary per policy
 
-| Policy | Median days delivery->payment | Job payments wk1 | wk2 | wk3 | wk4 | wk5 | wk6 | Runs with a job payment every week | ...counting pre-move invoices |
+Means or shares over runs unless marked median. "End value" = cash + 0.9 × receivables − debts. Finances good = no debt and end value ≥ $1,500; okay = solvent, below that.
+
+### With effects, story job declinable (main)
+
+| Policy | Parents' ending (day, median) | via loan / floor | Crisis | Loan taken (repaid on time) | Lowest cash (median) | Low in d28-35 | End value median (p10 / p90) | Finances good / okay | Days stress>70 | Stress avg d36-42 | Illness days | Rel. weeks missed | Pet deficit days (weighted) | Book milestones | Book hours | Effects held | Paid hours | Jobs done | Jobs late | Story job taken |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Careful | 0% (-) | 0% / 0% | 5% | 0% (-) | 932 | 67% | 3,288 (2,612 / 3,971) | 100% / 0% | 0.0 | 0 | 0.00 | 0.0 | 0.0 | 2.48 | 63 | 10.5 | 189 | 19.6 | 0.0 | 88% |
+| Book-heavy | 0% (42) | 0% / 0% | 46% | 2% (30%) | 45 | 94% | 1,562 (922 / 2,198) | 55% / 45% | 0.0 | 0 | 0.00 | 0.0 | 0.0 | 3.00 | 68 | 10.4 | 126 | 15.0 | 0.0 | 89% |
+| Grinder | 0% (-) | 0% / 0% | 1% | 0% (-) | 734 | 8% | 6,062 (4,459 / 7,285) | 100% / 0% | 2.8 | 29 | 0.18 | 5.2 | 18.9 | 0.00 | 0 | 13.2 | 357 | 28.8 | 0.1 | 96% |
+| Careless | 6% (41) | 1% / 5% | 73% | 48% (21%) | -126 | 38% | 483 (-302 / 1,226) | 4% / 90% | 0.0 | 5 | 0.00 | 4.3 | 17.8 | 0.08 | 17 | 8.2 | 161 | 13.5 | 8.2 | 69% |
+| Greedy-optimal* | 0% (-) | 0% / 0% | 3% | 0% (100%) | 826 | 15% | 5,533 (4,165 / 6,862) | 100% / 0% | 2.8 | 24 | 0.13 | 6.0 | 47.4 | 0.00 | 0 | 10.8 | 316 | 25.8 | 0.2 | 62% |
+
+### With effects, story job always taken
+
+| Policy | Parents' ending (day, median) | via loan / floor | Crisis | Loan taken (repaid on time) | Lowest cash (median) | Low in d28-35 | End value median (p10 / p90) | Finances good / okay | Days stress>70 | Stress avg d36-42 | Illness days | Rel. weeks missed | Pet deficit days (weighted) | Book milestones | Book hours | Effects held | Paid hours | Jobs done | Jobs late | Story job taken |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Careful | 0% (-) | 0% / 0% | 5% | 0% (-) | 929 | 69% | 3,328 (2,658 / 4,006) | 100% / 0% | 0.0 | 0 | 0.00 | 0.0 | 0.0 | 2.38 | 61 | 10.3 | 192 | 19.2 | 0.0 | 100% |
+| Book-heavy | 0% (-) | 0% / 0% | 46% | 2% (23%) | 45 | 99% | 1,628 (956 / 2,279) | 59% / 41% | 0.0 | 0 | 0.00 | 0.0 | 0.0 | 3.00 | 68 | 10.4 | 129 | 14.8 | 0.0 | 100% |
+| Grinder | 0% (-) | 0% / 0% | 1% | 0% (-) | 734 | 8% | 6,034 (4,402 / 7,263) | 100% / 0% | 3.3 | 30 | 0.21 | 5.2 | 18.9 | 0.00 | 0 | 13.1 | 358 | 28.6 | 0.2 | 100% |
+| Careless | 6% (41) | 1% / 5% | 75% | 47% (21%) | -128 | 41% | 476 (-289 / 1,203) | 4% / 90% | 0.0 | 5 | 0.00 | 4.3 | 17.8 | 0.08 | 17 | 8.2 | 162 | 13.0 | 7.9 | 100% |
+| Greedy-optimal* | 0% (-) | 0% / 0% | 4% | 0% (-) | 818 | 17% | 5,784 (4,386 / 7,100) | 100% / 0% | 2.3 | 21 | 0.10 | 6.0 | 47.8 | 0.00 | 0 | 10.8 | 322 | 25.8 | 0.3 | 100% |
+
+### No effects (control), story job declinable
+
+| Policy | Parents' ending (day, median) | via loan / floor | Crisis | Loan taken (repaid on time) | Lowest cash (median) | Low in d28-35 | End value median (p10 / p90) | Finances good / okay | Days stress>70 | Stress avg d36-42 | Illness days | Rel. weeks missed | Pet deficit days (weighted) | Book milestones | Book hours | Effects held | Paid hours | Jobs done | Jobs late | Story job taken |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Careful | 0% (-) | 0% / 0% | 8% | 0% (57%) | 765 | 80% | 2,669 (2,062 / 3,303) | 99% / 1% | 0.0 | 0 | 0.00 | 0.0 | 0.0 | 2.04 | 60 | 0.0 | 192 | 17.0 | 0.2 | 87% |
+| Book-heavy | 0% (41) | 0% / 0% | 54% | 4% (17%) | -21 | 94% | 1,192 (632 / 1,743) | 24% / 75% | 0.0 | 0 | 0.00 | 0.0 | 0.0 | 3.00 | 69 | 0.0 | 128 | 13.5 | 0.4 | 89% |
+| Grinder | 0% (-) | 0% / 0% | 4% | 1% (82%) | 1,088 | 46% | 2,583 (1,619 / 3,528) | 92% / 8% | 25.7 | 86 | 2.67 | 5.2 | 16.9 | 0.00 | 0 | 0.0 | 358 | 17.0 | 2.1 | 92% |
+| Careless | 4% (41) | 1% / 3% | 72% | 45% (19%) | -93 | 32% | 484 (-230 / 1,105) | 1% / 95% | 0.0 | 5 | 0.00 | 4.4 | 16.8 | 0.05 | 17 | 0.0 | 162 | 12.9 | 7.8 | 69% |
+| Greedy-optimal* | 0% (40) | 0% / 0% | 2% | 0% (67%) | 1,161 | 24% | 4,899 (3,873 / 5,936) | 100% / 0% | 2.6 | 20 | 0.12 | 6.0 | 42.0 | 0.00 | 0 | 0.0 | 334 | 23.3 | 0.3 | 56% |
+
+### No effects (control), story job always taken
+
+| Policy | Parents' ending (day, median) | via loan / floor | Crisis | Loan taken (repaid on time) | Lowest cash (median) | Low in d28-35 | End value median (p10 / p90) | Finances good / okay | Days stress>70 | Stress avg d36-42 | Illness days | Rel. weeks missed | Pet deficit days (weighted) | Book milestones | Book hours | Effects held | Paid hours | Jobs done | Jobs late | Story job taken |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Careful | 0% (-) | 0% / 0% | 7% | 0% (0%) | 776 | 84% | 2,724 (2,116 / 3,374) | 99% / 1% | 0.0 | 0 | 0.00 | 0.0 | 0.0 | 1.91 | 57 | 0.0 | 197 | 16.8 | 0.3 | 100% |
+| Book-heavy | 0% (42) | 0% / 0% | 53% | 3% (17%) | -15 | 100% | 1,250 (681 / 1,840) | 30% / 70% | 0.0 | 0 | 0.00 | 0.0 | 0.0 | 3.00 | 69 | 0.0 | 132 | 13.3 | 0.5 | 100% |
+| Grinder | 0% (-) | 0% / 0% | 4% | 0% (80%) | 1,084 | 47% | 2,564 (1,592 / 3,507) | 91% / 9% | 26.0 | 86 | 2.72 | 5.2 | 16.9 | 0.00 | 0 | 0.0 | 359 | 16.7 | 2.2 | 100% |
+| Careless | 4% (41) | 1% / 3% | 73% | 45% (19%) | -89 | 35% | 478 (-217 / 1,109) | 1% / 95% | 0.0 | 5 | 0.00 | 4.4 | 16.8 | 0.05 | 17 | 0.0 | 162 | 12.5 | 7.5 | 100% |
+| Greedy-optimal* | 0% (-) | 0% / 0% | 2% | 0% (-) | 1,143 | 31% | 4,999 (3,999 / 6,049) | 100% / 0% | 1.4 | 15 | 0.06 | 6.0 | 42.0 | 0.00 | 0 | 0.0 | 344 | 23.3 | 1.4 | 100% |
+
+**Notes**
+- **Effects still matter for money and the book**, less than in round 1. With effects off, careful's end value
+  falls from $3,288 to $2,669 and book milestones from 2.48 to 2.04. Book-heavy's good finances fall from 55% to
+  24%.
+- **The loan rarely decides anything at the tuned cash.** Book-heavy borrows in 2% of runs, careless in 48%.
+  Careless repays on time in only 21% of its loans, which is how it reaches the parents' ending.
+- **Grinder's stress goal holds in ~82% of runs.** It has ~2.8 days above 70 and recovers by days 36–42.
+
+### Feedback cadence (with effects)
+
+Job payments include the day-1 job and deposits; pre-move invoices are excluded (owner decision, 2026-11-27). The last column counts them, for comparison.
+
+| Policy | Median days delivery→payment | Job payments wk1 | wk2 | wk3 | wk4 | wk5 | wk6 | Runs with a job payment every week | ...counting pre-move invoices |
 |---|---|---|---|---|---|---|---|---|---|
-| Careful | 7 | 0.6 | 2.4 | 3.5 | 3.8 | 4.8 | 5.0 | 41% | 98% |
-| Book-heavy | 7 | 0.5 | 1.7 | 2.5 | 3.1 | 3.8 | 4.4 | 27% | 91% |
-| Grinder | 7 | 0.8 | 3.7 | 4.8 | 3.5 | 3.9 | 3.5 | 50% | 93% |
-| Careless | 7 | 0.4 | 1.7 | 2.8 | 2.7 | 2.5 | 2.4 | 20% | 82% |
-| Greedy-optimal* | 7 | 0.8 | 3.2 | 4.7 | 4.9 | 5.3 | 5.5 | 53% | 98% |
+| Careful | 7 | 1.8 | 2.3 | 2.3 | 2.2 | 3.9 | 3.6 | 73% | 88% |
+| Book-heavy | 5 | 1.6 | 1.4 | 1.3 | 1.5 | 3.4 | 3.1 | 48% | 75% |
+| Grinder | 7 | 2.2 | 3.9 | 4.6 | 4.0 | 5.2 | 4.6 | 94% | 98% |
+| Careless | 7 | 1.5 | 1.9 | 2.5 | 2.4 | 2.1 | 2.0 | 61% | 76% |
+| Careful (story forced) | 7 | 1.8 | 2.2 | 2.2 | 2.1 | 3.9 | 3.6 | 69% | 86% |
+| Book-heavy (story forced) | 5 | 1.6 | 1.4 | 1.2 | 1.4 | 3.4 | 3.1 | 44% | 72% |
+| Grinder (story forced) | 7 | 2.2 | 3.9 | 4.5 | 3.9 | 5.1 | 4.5 | 93% | 97% |
+| Careless (story forced) | 7 | 1.5 | 1.9 | 2.5 | 2.3 | 2.0 | 1.9 | 59% | 74% |
 
-**Payment cadence.** Payments arrive steadily from week 2 on, and the median delivery-to-payment time is 7 days.
-**Week 1 is the gap.** Only direct-client jobs (25% of offers, paid after 2–3 days) can pay inside week 1. A
-careful run gets 0.6 job payments in week 1 on average. Counting the pre-move invoice on day 6, 98% of careful
-runs are paid every week. Whether the target counts pre-move invoices is an open question (§8).
+- **Week 1 is fixed:** the day-1 job pays on day 4 in every run.
+- **The gaps are in weeks 2–4.** Careful and book-heavy take the 12,500-word story job (88% of runs), which fills
+  those weeks and pays only on day 33. Few other jobs fit, so some weeks bring no job payment.
+- **Grinder works enough hours to take other jobs too**, and meets the target (94%).
+- **Other levers move it little.** Raising client B to a job every week moved careful only from 69% to 73% in a
+  500-seed probe. The gap is the story job's design, not a tuning gap (§11).
 
-## 3. Acceptance targets (with effects, book unpaid)
+## 4. Acceptance targets (§10.5)
 
-| Policy | Target | Result | Met |
-|---|---|---|---|
-| Careful | Bankrupt <= 8% | 0.9% | yes |
-| Careful | Lowest cash in days 28-35 in >= 60% of runs | 58.2% | **no** |
-| Careful | Book finished >= 30% | 63.4% | yes |
-| Book-heavy | Bankrupt 15-30% | 26.5% | yes |
-| Book-heavy | Book finished >= 70% | 100.0% | yes |
-| Grinder | Bankrupt <= 5% | 1.1% | yes |
-| Grinder | Stress > 70 on >= 40% of days in weeks 4-5 | 80.4% of days (mean) | yes |
-| Grinder | Relationship needs missed >= 2 weeks | 5.4 weeks (mean) | yes |
-| Careless | Bankrupt >= 60% | 76.0% | yes |
-| Greedy-optimal* | Does not dominate the combined ending | good combined ending in 0.0% of runs | yes |
-| effects | No single effect in > 70% of top-decile runs | highest: cat_tool (careful) 100% | **no** |
-| effects | No combo exceeds caps (no designed synergies exist yet) | caps enforced by clamping; the efficiency cap was reached in 44.2% of runs | yes |
-| Careful | Feedback: a job payment in each of weeks 1-6 (>= 90% of runs) | 41% (incl. pre-move invoices: 98%) | **no** |
-| Book-heavy | Feedback: a job payment in each of weeks 1-6 (>= 90% of runs) | 27% (incl. pre-move invoices: 91%) | **no** |
-| Grinder | Feedback: a job payment in each of weeks 1-6 (>= 90% of runs) | 50% (incl. pre-move invoices: 93%) | **no** |
-| Careless | Feedback: a job payment in each of weeks 1-6 (>= 90% of runs) | 20% (incl. pre-move invoices: 82%) | **no** |
-| Greedy-optimal* | Feedback: a job payment in each of weeks 1-6 (>= 90% of runs) | 53% (incl. pre-move invoices: 98%) | **no** |
+Main variant (with effects, story job declinable): **16 of 31 met.** The right-hand columns repeat the check with the story job always taken.
 
-With the small book advance: Careful bankrupt 0%, book finished 63%; Book-heavy bankrupt 1%, book finished 100%.
+| Policy | Target | Result (declinable) | Met | Result (always taken) | Met |
+|---|---|---|---|---|---|
+| Careful | Finishes book ~40-50% | 48.9% | yes | 40.4% | yes |
+| Careful | Best ~25-35% | 48.9% | **no** | 40.4% | **no** |
+| Careful | Good or better ~70-80% | 100.0% | **no** | 100.0% | **no** |
+| Careful | Parents' ending <= 8% | 0.0% | yes | 0.0% | yes |
+| Book-heavy | Finishes book ~85-95% | 100.0% | **no** | 100.0% | **no** |
+| Book-heavy | Best ~45-55% | 54.8% | yes | 59.2% | **no** |
+| Book-heavy | Good or better ~60-70% | 54.8% | **no** | 59.2% | **no** |
+| Book-heavy | Parents' ending 15-30% | 0.1% | **no** | 0.0% | **no** |
+| Grinder | Finishes book ~0% (<= 2%) | 0.0% | yes | 0.0% | yes |
+| Grinder | Best 0% | 0.0% | yes | 0.0% | yes |
+| Grinder | Good or better <= 10% | 0.0% | yes | 0.0% | yes |
+| Grinder | Parents' ending <= 5% | 0.0% | yes | 0.0% | yes |
+| Careless | Finishes book ~0-5% | 0.0% | yes | 0.0% | yes |
+| Careless | Best ~0% (<= 2%) | 0.0% | yes | 0.0% | yes |
+| Careless | Good or better <= 10% | 0.0% | yes | 0.0% | yes |
+| Careless | Parents' ending >= 60% | 6.1% | **no** | 5.8% | **no** |
+| Greedy-optimal* | Best 0% | 0.0% | yes | 0.0% | yes |
+| Greedy-optimal* | Good or better 0% | 0.0% | yes | 0.0% | yes |
+| Careful | Lowest cash in days 28-35 in >= 60% of runs | 66.6% | yes | 68.8% | yes |
+| Careful | Holds 7-9 effects at the end | 10.5 | **no** | 10.3 | **no** |
+| Grinder | Holds 5-6 effects (or its natural count; report) | 13.2 | **no** | 13.1 | **no** |
+| Careless | Holds 5-6 effects (or its natural count; report) | 8.2 | **no** | 8.2 | **no** |
+| Effects | No single offered effect in > 70% of top-decile runs (any policy) | highest: side_class for careful, 86% | **no** | highest: side_class for careful, 82% | **no** |
+| Careful | CAT tool picked 40-60% of the time when offered | 45% | yes | 45% | yes |
+| Effects | No dead effects | deposit_terms, neighbor_sitter | **no** | deposit_terms, neighbor_sitter | **no** |
+| Careful | Effect boost: average +10-20% | +7.7% | **no** | +7.2% | **no** |
+| Careful | Effect boost: last 5 workdays +20-35% | +11.7% | **no** | +11.4% | **no** |
+| Careful | Feedback: a job payment in each of weeks 1-6 in >= 90% of runs | 73% | **no** | 69% | **no** |
+| Book-heavy | Feedback: a job payment in each of weeks 1-6 in >= 90% of runs | 48% | **no** | 44% | **no** |
+| Grinder | Feedback: a job payment in each of weeks 1-6 in >= 90% of runs | 94% | yes | 93% | yes |
+| Careful | Story job accepted in >= 70% of runs (declinable) | 88% | yes | 100% | yes |
 
-**Notes on the misses**
-- **Careful low point (58%).** Just short of target; the recommendation in §7 fixes it.
-- **Effects dominance (100%).** Structural (§5).
-- **Feedback.** Met for every working policy only if pre-move invoices count (careless reaches 82%, which is
-  acceptable for a strategy meant to fail).
-- **Caps.** No combination can exceed a cap, because the code clamps each category. But the efficiency cap
-  (+40%) is reached in 44% of all runs (99.7% of careful runs), mostly via morning person plus
-  context switcher or deep focus plus coworking. This is fine while no designed synergies exist.
+"Always taken" changes little except careful's book (40% finished) and book-heavy's best (59%, just outside its
+band). The targets that miss do so for the structural reasons in the headlines, not for want of a better number.
 
-## 4. Charts
+## 5. Charts
 
 ![Cash over time](charts/cash_over_time.png)
 
 ![Day of lowest cash](charts/lowest_cash_day.png)
 
-Book-heavy and careless show a second drop around day 38. Those runs used the rent-late lifeline on day 31 and
-must pay the rent plus the $75 fee by day 38. The grinder and greedy low points come in week 1, because their
-week-2 income is large enough that the convergence week never becomes their lowest point.
+## 6. Effects
 
-## 5. Effects
+**How the policies pick effects.** Careful, book-heavy, grinder and greedy-optimal rate each offered effect with a
+short analytic estimate (`sim/src/effect_value.py`) of what it changes over the rest of the run, for that player's
+schedule, in five currencies:
+- money;
+- stress points;
+- book hours;
+- free hours;
+- risk (expected pet-deficit days or missed weeks).
+
+Each policy has hand-set weights for these in `data/policies.yaml`. Careful, for example: $1 = 1, a stress point
+= 2, a book hour = 15, a free hour = 5. Grinder still takes efficiency/throughput/rate effects first. Careless
+picks at random. Shop items follow fixed buy rules (cash threshold, by day 28). **Pick rates therefore measure
+these heuristics, not real players.**
 
 ### Offers by source and effects held (per run, mean)
 
-| Policy | Weekly | Work milestone | Book milestone | Shop buys | Held at end | Offers with empty pool | Effect boost avg / last 5 workdays |
-|---|---|---|---|---|---|---|---|
-| Careful | 5.0 | 5.6 | 2.6 | 1.0 | 11.0 | 3.27 | +24% / +27% |
-| Book-heavy | 5.0 | 4.4 | 3.0 | 0.9 | 10.9 | 2.42 | +21% / +24% |
-| Grinder | 5.0 | 5.7 | 0.0 | 2.0 | 11.7 | 0.98 | +27% / +33% |
-| Careless | 5.0 | 3.3 | 0.1 | 1.4 | 9.8 | 0.03 | +19% / +36% |
-| Greedy-optimal* | 5.0 | 6.9 | 0.0 | 2.0 | 11.0 | 2.87 | +24% / +29% |
+| Policy | Weekly | Work milestone | Book milestone | Shop buys | Held at end | Effect boost avg / last 5 workdays |
+|---|---|---|---|---|---|---|
+| Careful | 5.0 | 2.01 | 2.48 | 1.00 | 10.5 | +7.7% / +11.7% |
+| Book-heavy | 5.0 | 1.41 | 3.00 | 1.00 | 10.4 | +4.4% / +5.8% |
+| Grinder | 5.0 | 3.16 | 0.00 | 5.00 | 13.2 | +16.7% / +21.6% |
+| Careless | 5.0 | 1.23 | 0.08 | 1.94 | 8.2 | +5.1% / +9.3% |
+| Greedy-optimal* | 5.0 | 2.78 | 0.00 | 3.00 | 10.8 | +15.0% / +18.6% |
 
-Target: careful holds 7-9 effects, neglectful/narrow 5-6; effect boost +15-25% on average, +30-50% at the end (§8.2). "Effect boost" = the effects' multiplier on paid-work output (efficiency x throughput), averaged over hours worked.
+Targets: careful holds 7–9, neglectful/narrow 5–6 (§8.1); careful's boost +10–20% on average and +20–35% in the last 5 workdays (§8.2). "Effect boost" = the effects' multiplier on pay per paid hour (efficiency × throughput × rate effects), averaged over the hours worked.
 
-### Pick rate (when offered) and share of runs holding each effect
+### Pick rate when offered, and share of runs holding each effect
 
-Left block: how often the effect is picked when it is one of the three offered (shop items: share of runs that bought it). Right block: share of all runs / of top-decile runs (by end value) that hold it at the end.
+Left block: pick rate when the effect is one of the three offered (shop items: share of runs that bought it). Right block: share of all runs holding it at the end / share of top-decile runs (by end value) that picked it from an offer. Careless picks at random.
 
-| Effect | pick: Careful | pick: Book-heavy | pick: Grinder | pick: Careless | pick: Greedy-optimal* | held all/top10: Careful | held all/top10: Book-heavy | held all/top10: Grinder | held all/top10: Careless | held all/top10: Greedy-optimal* |
-|---|---|---|---|---|---|---|---|---|---|---|
-| cat_tool | 97% | 48% | 100% | 34% | 99% | 100% / 100% | 100% / 100% | 100% / 100% | 81% / 86% | 100% / 100% |
-| context_switcher | 69% | 63% | 52% | 35% | 22% | 100% / 100% | 100% / 100% | 100% / 100% | 82% / 86% | 100% / 100% |
-| coworking | - | - | shop 100% | shop 71% | shop 100% | 0% / 0% | 0% / 0% | 100% / 100% | 71% / 72% | 100% / 100% |
-| deep_focus | 30% | 55% | 58% | 34% | 57% | 100% / 100% | 100% / 100% | 100% / 100% | 81% / 86% | 100% / 100% |
-| direct_network | 67% | 38% | 86% | 35% | 83% | 100% / 100% | 100% / 100% | 100% / 100% | 85% / 87% | 100% / 100% |
-| fast_invoicer | 21% | 19% | 13% | 34% | 18% | 100% / 100% | 100% / 100% | 78% / 97% | 85% / 86% | 100% / 100% |
-| headphones | shop 100% | shop 89% | shop 100% | shop 72% | shop 100% | 100% / 100% | 89% / 98% | 100% / 100% | 72% / 70% | 100% / 100% |
-| her_spreadsheet | 31% | 28% | 18% | 33% | - | 100% / 100% | 100% / 100% | 95% / 100% | 85% / 86% | 0% / 0% |
-| morning_pages | 51% | 96% | 28% | 33% | 27% | 100% / 100% | 100% / 100% | 100% / 100% | 85% / 90% | 100% / 100% |
-| morning_person | 81% | 80% | 68% | 34% | 51% | 100% / 100% | 100% / 100% | 100% / 100% | 81% / 87% | 100% / 100% |
-| night_owl | 17% | 16% | 54% | 34% | 62% | 100% / 100% | 100% / 100% | 100% / 100% | 83% / 81% | 100% / 100% |
-| walk_routine | 42% | 63% | 37% | 35% | 37% | 100% / 100% | 100% / 100% | 100% / 100% | 86% / 79% | 100% / 100% |
+| Effect | Category | pick: Careful | pick: Book-heavy | pick: Grinder | pick: Careless | pick: Greedy-optimal* | held all / top10: Careful | held all / top10: Book-heavy | held all / top10: Grinder | held all / top10: Careless | held all / top10: Greedy-optimal* |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| deep_focus | efficiency 📖 | 35% | 63% | 66% | 32% | 57% | 27% / 27% | 45% / 39% | 41% / 54% | 17% / 14% | 35% / 36% |
+| context_switcher | efficiency | 56% | 47% | 72% | 34% | 18% | 39% / 40% | 36% / 34% | 45% / 40% | 18% / 16% | 13% / 10% |
+| morning_person | efficiency | 78% | 53% | 78% | 31% | 53% | 49% / 51% | 39% / 48% | 45% / 48% | 17% / 18% | 33% / 32% |
+| night_owl | efficiency | 2% | 2% | 58% | 33% | 51% | 2% / 4% | 2% / 1% | 37% / 34% | 17% / 12% | 31% / 20% |
+| pomodoro | efficiency | 87% | 58% | 53% | 37% | 2% | 53% / 57% | 41% / 41% | 35% / 34% | 19% / 24% | 2% / 1% |
+| sunday_planning | efficiency | 44% | 26% | 85% | 31% | 72% | 32% / 30% | 21% / 19% | 47% / 52% | 17% / 20% | 42% / 45% |
+| coworking (shop) | efficiency | bought 0% | bought 0% | bought 100% | bought 33% | bought 100% | 0% / · | 0% / · | 100% / · | 33% / · | 100% / · |
+| headphones (shop) | efficiency | bought 100% | bought 100% | bought 100% | bought 32% | bought 100% | 100% / · | 100% / · | 100% / · | 32% / · | 100% / · |
+| cat_tool | throughput | 45% | 10% | 93% | 33% | 89% | 33% / 30% | 8% / 5% | 53% / 60% | 18% / 16% | 46% / 44% |
+| second_monitor (shop) | throughput | bought 0% | bought 0% | bought 100% | bought 32% | bought 100% | 0% / · | 0% / · | 100% / · | 32% / · | 100% / · |
+| termbase | throughput | 4% | 3% | 61% | 35% | 38% | 4% / 2% | 3% / 2% | 38% / 33% | 19% / 14% | 23% / 23% |
+| pe_veteran | throughput 📖 | 20% | 12% | 55% | 32% | 29% | 17% / 12% | 11% / 16% | 35% / 29% | 18% / 13% | 20% / 15% |
+| direct_network | rate | 11% | 25% | 61% | 33% | 58% | 13% / 2% | 28% / 18% | 48% / 44% | 22% / 18% | 44% / 50% |
+| specialist_niche | rate | 88% | 71% | 97% | 34% | 93% | 67% / 74% | 60% / 64% | 65% / 79% | 23% / 22% | 60% / 64% |
+| rush_specialist | rate | 22% | 15% | 80% | 33% | 78% | 24% / 17% | 17% / 9% | 59% / 57% | 22% / 22% | 57% / 58% |
+| loyal_client | rate | 13% | 23% | 56% | 32% | 35% | 16% / 8% | 26% / 15% | 43% / 34% | 21% / 25% | 28% / 15% |
+| fast_invoicer | cash_flow | 40% | 27% | 4% | 33% | 9% | 42% / 40% | 30% / 31% | 4% / 4% | 22% / 22% | 9% / 10% |
+| invoice_reminders | cash_flow | 22% | 22% | 9% | 33% | 13% | 24% / 26% | 25% / 20% | 8% / 8% | 23% / 22% | 12% / 12% |
+| deposit_terms | cash_flow | 4% | 5% | 0% | 32% | 0% | 5% / 5% | 5% / 4% | 0% / 0% | 21% / 47% | 0% / 0% |
+| side_class | cash_flow | 97% | 59% | 42% | 32% | 89% | 71% / 86% | 53% / 80% | 36% / 44% | 21% / 34% | 58% / 64% |
+| frugal_cooking | cash_flow | 65% | 45% | 37% | 34% | 68% | 56% / 60% | 44% / 56% | 31% / 32% | 23% / 32% | 49% / 52% |
+| morning_pages | stress | 50% | 87% | 2% | 33% | 21% | 48% / 44% | 64% / 64% | 2% / 1% | 22% / 22% | 18% / 20% |
+| nap_habit | stress | 9% | 12% | 13% | 35% | 24% | 10% / 10% | 14% / 15% | 12% / 14% | 24% / 25% | 21% / 26% |
+| boundaries | stress | 18% | 90% | 1% | 31% | 0% | 21% / 20% | 70% / 64% | 1% / 0% | 21% / 26% | 0% / 0% |
+| standing_desk (shop) | stress | bought 0% | bought 0% | bought 100% | bought 34% | bought 0% | 0% / · | 0% / · | 100% / · | 34% / · | 0% / · |
+| shared_calendar | her | 25% | 31% | 29% | 36% | 37% | 27% / 21% | 33% / 35% | 26% / 25% | 24% / 18% | 31% / 30% |
+| sunday_brunch | her | 10% | 8% | 1% | 33% | 5% | 12% / 13% | 10% / 9% | 1% / 2% | 22% / 14% | 5% / 4% |
+| quiet_company | her 📖 | 29% | 12% | 15% | 35% | 25% | 31% / 26% | 14% / 14% | 15% / 16% | 23% / 18% | 22% / 20% |
+| evening_walks | her | 33% | 36% | 6% | 34% | 7% | 35% / 33% | 36% / 40% | 6% / 6% | 23% / 16% | 7% / 6% |
+| walk_routine | pet | 66% | 86% | 33% | 35% | 40% | 55% / 46% | 67% / 62% | 29% / 30% | 23% / 17% | 32% / 28% |
+| reading_aloud | pet 📖 | 70% | 52% | 21% | 32% | 33% | 61% / 62% | 45% / 43% | 20% / 16% | 22% / 26% | 29% / 27% |
+| neighbor_sitter | pet | 3% | 5% | 1% | 34% | 1% | 4% / 2% | 6% / 5% | 1% / 0% | 22% / 20% | 1% / 0% |
+| puppy_class (shop) | pet | bought 0% | bought 0% | bought 0% | bought 32% | bought 0% | 0% / · | 0% / · | 0% / · | 32% / · | 0% / · |
+| sturdy_toys (shop) | pet | bought 0% | bought 0% | bought 100% | bought 31% | bought 0% | 0% / · | 0% / · | 100% / · | 31% / · | 0% / · |
+| margin_notes | book 📖 | 16% | 40% | 12% | 35% | 16% | 18% / 22% | 36% / 38% | 12% / 8% | 25% / 24% | 15% / 14% |
+| writing_group | book 📖 | 61% | 69% | 26% | 35% | 46% | 55% / 52% | 54% / 44% | 23% / 22% | 22% / 20% | 36% / 38% |
+
+**Dead effects** (held by no run of any policy, or picked < 10% of the time when offered by every value-based policy): deposit_terms, neighbor_sitter.
+
+### Synergies: share of runs holding both effects
+
+| Policy | quiet_house | first_audience | steady_hands |
+|---|---|---|---|
+| Careful | 27% | 33% | 0% |
+| Book-heavy | 45% | 29% | 1% |
+| Grinder | 41% | 5% | 15% |
+| Careless | 6% | 4% | 3% |
+| Greedy-optimal* | 35% | 8% | 5% |
+
+### Cap hits: share of runs where a category's summed bonus went over its cap at least once
+
+| Policy | efficiency (cap +40%) | throughput (cap +15%) | rate (cap +25%) | stress_relief (cap +50%) | book (cap +20%) |
+|---|---|---|---|---|---|
+| Careful | 0% | 3% | 5% | 64% | 1% |
+| Book-heavy | 0% | 1% | 3% | 57% | 3% |
+| Grinder | 0% | 32% | 17% | 0% | 0% |
+| Careless | 0% | 5% | 2% | 23% | 0% |
+| Greedy-optimal* | 0% | 12% | 18% | 4% | 0% |
 
 ### Combos over-represented in the top decile (lift = share in top 10% / share overall)
 
 | Policy | Top combos |
 |---|---|
-| Careful | cat_tool+context_switcher (x1.00), cat_tool+deep_focus (x1.00), cat_tool+direct_network (x1.00) |
-| Book-heavy | cat_tool+headphones (x1.10), context_switcher+headphones (x1.10), deep_focus+headphones (x1.10) |
-| Grinder | cat_tool+fast_invoicer (x1.24), context_switcher+fast_invoicer (x1.24), coworking+fast_invoicer (x1.24) |
-| Careless | cat_tool+morning_person (x1.18), context_switcher+morning_person (x1.15), deep_focus+morning_person (x1.15) |
-| Greedy-optimal* | cat_tool+context_switcher (x1.00), context_switcher+coworking (x1.00), context_switcher+deep_focus (x1.00) |
+| Careful | margin_notes+sunday_planning (×1.52), invoice_reminders+side_class (×1.42), margin_notes+side_class (×1.39) |
+| Book-heavy | pe_veteran+side_class (×2.52), morning_person+side_class (×1.95), frugal_cooking+side_class (×1.88) |
+| Grinder | side_class+sunday_planning (×1.61), nap_habit+sunday_planning (×1.57), side_class+specialist_niche (×1.57) |
+| Careless | coworking+deposit_terms (×2.41), frugal_cooking+loyal_client (×2.33), deposit_terms+puppy_class (×2.26) |
+| Greedy-optimal* | nap_habit+shared_calendar (×1.50), deep_focus+nap_habit (×1.43), nap_habit+side_class (×1.43) |
 
-**The pool is too small for the number of offers.**
-- Offers: careful gets ~5 weekly + ~5.6 work-milestone + ~2.6 book-milestone offers + 1 shop buy, about 14 chances.
-- Pool: only 10 effects can appear in offers (12 in the starter pool, minus 2 shop-only items).
-- Result: careful holds ~11 of the 12 effects by the end (target 7–9), and later offers come from an almost empty
-  pool. The top decile therefore holds the same effects as everyone else (100%), and "pick 1 of 3" stops being a
-  choice in weeks 4–5.
-- Even the spec's own expected counts (5 + 2–3 + 0–3 + 0–2 = 7–13 offers) need a larger pool. A pool of roughly
-  25–30 effects would keep late picks meaningful. Adding effects is a design decision for the owner.
+**Reading the tables**
+- **Variety is fixed.** With 30 offered effects no single effect dominates, except the **Saturday class**: +$100
+  for 4 hours beats translation per hour, has no deadline and fits a careful player's free Saturday. It is picked
+  97% of the time by careful and is held by 86% of careful's top decile.
+- **Dead effects** (no value-based policy picks them ≥ 10% of the time):
+  - **Deposit terms:** liquidity only, and it costs 25% of large offers.
+  - **The neighbor:** $25 a week buys little for players who already meet the pet's needs. The cheaper "2 h of
+    help on Sunday" option isn't modeled.
+- **Nearly dead:** **Sunday brunch** (10%) saves only 1 hour per half-day.
+- **Grinder and greedy-optimal only:** night owl (58% / 51%) and termbase (61% / 38%) are picked often only by the two long-hours players.
+- **Synergies happen:**
+  - quiet house in 27–45% of careful/book-heavy/grinder runs;
+  - first audience in ~30% of careful/book-heavy runs;
+  - steady hands almost only for the grinder (15%), since others rarely take loyal client.
+- **Caps.**
+  - The efficiency cap is never reached (smaller effects; reaching +40% takes 5–6 stacked effects).
+  - The stress-relief cap binds often (morning pages + reading aloud, and the writing group's "double" session).
+  - The throughput cap binds for the grinder (32% of runs).
+- **Effect boost** is +8% for careful, below the +10–20% target. Effects are individually smaller, and many of
+  careful's picks are not output effects: the Saturday class, frugal cooking, reading aloud, her effects. Rate
+  effects are counted in the boost, but money from side income and savings is not.
+- **Held at end:** careful 10.5, book-heavy 10.4, grinder 13.2, careless 8.2. Careful gets ~5 weekly + 2.4
+  work-milestone + 2.4 book-milestone + 0.5 shop picks. 7–9 needs fewer offers (§10, §11).
 
-**Strength and dead effects**
-- The **CAT tool** is picked ~97% of the time by careful and ~100% by the grinder and greedy. Its +15% throughput
-  sits in its own category, so the efficiency cap doesn't limit it, and $30/week is cheap.
-- **Fast invoicer** (13–21%) and **night owl** (16–17% for careful and book-heavy) are rarely chosen.
-- **Her spreadsheet** has no mechanical benefit in the simulation. No policy uses a cash forecast, so it is a dead
-  effect here. Its value is narrative or UI.
+## 7. Regular clients and the story job
 
-**Effect boost vs. the §8.2 targets**
-- Average over the run: +24% for careful (target +15–25%), met.
-- Last 5 workdays: +27% (target +30–50%), slightly low. The cap and the late-offer lean away from efficiency hold
-  it down.
+Jobs accepted per run from each regular client (B includes the day-1 job; A includes the story job).
 
-## 6. Sensitivity (each parameter -25% / baseline / +25%)
+| Policy | Client A jobs | Client B jobs | Client C jobs | Story job taken | Story job declined |
+|---|---|---|---|---|---|
+| Careful | 3.2 | 4.5 | 0.7 | 88% | 12% |
+| Book-heavy | 2.5 | 3.9 | 0.5 | 89% | 11% |
+| Grinder | 4.8 | 5.0 | 1.7 | 96% | 4% |
+| Careless | 3.5 | 3.7 | 1.6 | 69% | 31% |
+| Greedy-optimal* | 3.7 | 6.0 | 2.2 | 62% | 38% |
+| Careful (story forced) | 3.4 | 4.3 | 0.7 | 100% | 0% |
+| Book-heavy (story forced) | 2.7 | 3.8 | 0.4 | 100% | 0% |
+| Grinder (story forced) | 4.8 | 4.9 | 1.7 | 100% | 0% |
+| Careless (story forced) | 3.9 | 3.7 | 1.6 | 100% | 0% |
+| Greedy-optimal* (story forced) | 4.3 | 5.9 | 2.2 | 100% | 0% |
 
-With effects, book unpaid, chosen starting cash, 2,000 seeds per point. Sorted by the largest change in any policy's bankruptcy rate.
+- **Story job acceptance:** careful takes it in 88% of declinable runs (target ≥ 70%), using the rule "take it if
+  it fits with the extra hours I allow myself when behind" (§11). Careless takes it 69% of the time (random).
+  Greedy-optimal takes it 62% of the time (only when it fits its best-paying plan).
+- **Habit jobs** arrive as specified, but careful and book-heavy take few of client C's large jobs (0.5–0.7 per
+  run): they don't fit around the story job.
 
-| Parameter | Max bankrupt swing | Careful bankrupt | Book-heavy bankrupt | Grinder bankrupt | Careless bankrupt | Careful low d28-35 | Careful book finished | Careful end value (median) | Grinder stress>70 wk4-5 |
+## 8. Sensitivity
+
+Each parameter at its low / baseline / high value (±25% unless stated), all else at the tuned config, with effects and the story job declinable, 2,000 seeds per point. Sorted by the largest change in any player policy's parents' / best / good-or-better share. NET is fixed (§4) and shown as a reference row only.
+
+| Parameter | Max swing | Careful parents | Careful best | Careful good+ | Careful finishes book | Book-heavy parents | Book-heavy best | Grinder parents | Careless parents |
 |---|---|---|---|---|---|---|---|---|---|
-| NET factor | 44 pp | 9% / 1% / 0% | 70% / 26% / 8% | 15% / 1% / 0% | 98% / 76% / 39% | 72% / 58% / 36% | 63% / 63% / 63% | 1,333 / 2,625 / 3,911 | 81% / 80% / 80% |
-| rent | 26 pp | 0% / 1% / 3% | 10% / 26% / 53% | 0% / 1% / 3% | 51% / 76% / 91% | 40% / 58% / 70% | 63% / 63% / 63% | 3,010 / 2,625 / 2,232 | 80% / 80% / 81% |
-| starting cash | 23 pp | 3% / 1% / 0% | 49% / 26% / 11% | 6% / 1% / 0% | 91% / 76% / 53% | 60% / 58% / 50% | 62% / 63% / 67% | 2,240 / 2,625 / 3,046 | 84% / 80% / 79% |
-| offer rate | 14 pp | 2% / 1% / 0% | 40% / 26% / 20% | 1% / 1% / 1% | 80% / 76% / 73% | 67% / 58% / 49% | 63% / 63% / 63% | 2,298 / 2,625 / 2,810 | 61% / 80% / 88% |
-| payment delays | 10 pp | 0% / 1% / 3% | 18% / 26% / 36% | 0% / 1% / 2% | 69% / 76% / 81% | 47% / 58% / 67% | 64% / 63% / 63% | 2,663 / 2,625 / 2,607 | 80% / 80% / 81% |
-| effect sizes | 8 pp | 2% / 1% / 1% | 34% / 26% / 22% | 3% / 1% / 0% | 82% / 76% / 70% | 62% / 58% / 51% | 53% / 63% / 71% | 2,269 / 2,625 / 2,894 | 86% / 80% / 71% |
-| PE share | 3 pp | 1% / 1% / 2% | 26% / 26% / 30% | 1% / 1% / 1% | 74% / 76% / 78% | 56% / 58% / 59% | 63% / 63% / 63% | 2,717 / 2,625 / 2,489 | 81% / 80% / 78% |
-| book remaining work (inverse of starting progress) | 2 pp | 1% / 1% / 1% | 24% / 26% / 28% | 1% / 1% / 1% | 76% / 76% / 76% | 57% / 58% / 59% | 100% / 63% / 0% | 2,616 / 2,625 / 2,589 | 80% / 80% / 80% |
-| late-payment share | 2 pp | 1% / 1% / 1% | 26% / 26% / 28% | 1% / 1% / 1% | 75% / 76% / 77% | 57% / 58% / 59% | 63% / 63% / 63% | 2,629 / 2,625 / 2,622 | 80% / 80% / 80% |
-| week-2 story job size | 1 pp | 1% / 1% / 1% | 28% / 26% / 26% | 1% / 1% / 1% | 75% / 76% / 76% | 53% / 58% / 61% | 63% / 63% / 64% | 2,627 / 2,625 / 2,629 | 78% / 80% / 82% |
+| book remaining hours H (-25% / +25%) | 49 pp | 0% / 0% / 0% | 95% / 49% / 0% | 100% / 100% / 100% | 95% / 49% / 0% | 0% / 0% / 0% | 59% / 55% / 52% | 0% / 0% / 0% | 6% / 6% / 6% |
+| starting cash (-25% / +25%) | 40 pp | 0% / 0% / 0% | 44% / 49% / 49% | 99% / 100% / 100% | 45% / 49% / 49% | 1% / 0% / 0% | 15% / 55% / 88% | 0% / 0% / 0% | 14% / 6% / 2% |
+| rent (-25% / +25%) | 31 pp | 0% / 0% / 0% | 49% / 49% / 48% | 100% / 100% / 99% | 49% / 49% / 49% | 0% / 0% / 0% | 83% / 55% / 24% | 0% / 0% / 0% | 3% / 6% / 11% |
+| effect sizes (-25% / +25%) | 17 pp | 0% / 0% / 0% | 45% / 49% / 56% | 100% / 100% / 100% | 45% / 49% / 56% | 0% / 0% / 0% | 37% / 55% / 65% | 0% / 0% / 0% | 7% / 6% / 5% |
+| regular-client job rate (-25% / +25%) | 10 pp | 0% / 0% / 0% | 51% / 49% / 47% | 100% / 100% / 100% | 51% / 49% / 47% | 0% / 0% / 0% | 45% / 55% / 61% | 0% / 0% / 0% | 7% / 6% / 6% |
+| random offer rate (-25% / +25%) | 8 pp | 0% / 0% / 0% | 50% / 49% / 48% | 100% / 100% / 100% | 50% / 49% / 48% | 0% / 0% / 0% | 46% / 55% / 60% | 0% / 0% / 0% | 6% / 6% / 6% |
+| story job size (-25% / +25%) | 4 pp | 0% / 0% / 0% | 48% / 49% / 49% | 100% / 100% / 100% | 48% / 49% / 49% | 0% / 0% / 0% | 52% / 55% / 59% | 0% / 0% / 0% | 5% / 6% / 7% |
+| regular-client rate bonus (-25% / +25%) | 4 pp | 0% / 0% / 0% | 49% / 49% / 49% | 100% / 100% / 100% | 49% / 49% / 49% | 0% / 0% / 0% | 51% / 55% / 58% | 0% / 0% / 0% | 6% / 6% / 5% |
+| transformation-bill odds (-25% / +25%) | 2 pp | 0% / 0% / 0% | 49% / 49% / 49% | 100% / 100% / 100% | 49% / 49% / 49% | 0% / 0% / 0% | 57% / 55% / 52% | 0% / 0% / 0% | 5% / 6% / 6% |
+| parents'-ending cash floor (-25% / +25%) | 2 pp | 0% / 0% / 0% | 49% / 49% / 49% | 100% / 100% / 100% | 49% / 49% / 49% | 0% / 0% / 0% | 55% / 55% / 55% | 0% / 0% / 0% | 9% / 6% / 5% |
+| loan repayment window (5 days / 9 days) | 2 pp | 0% / 0% / 0% | 49% / 49% / 49% | 100% / 100% / 100% | 49% / 49% / 49% | 0% / 0% / 0% | 55% / 55% / 55% | 0% / 0% / 0% | 8% / 6% / 5% |
+| payment delays (client types) (-25% / +25%) | 2 pp | 0% / 0% / 0% | 49% / 49% / 49% | 100% / 100% / 100% | 49% / 49% / 49% | 0% / 0% / 0% | 56% / 55% / 53% | 0% / 0% / 0% | 5% / 6% / 6% |
+| PE share (-25% / +25%) | 2 pp | 0% / 0% / 0% | 49% / 49% / 48% | 100% / 100% / 100% | 49% / 49% / 48% | 0% / 0% / 0% | 56% / 55% / 53% | 0% / 0% / 0% | 5% / 6% / 6% |
+| regular-client payment days (-25% / +25%) | 1 pp | 0% / 0% / 0% | 49% / 49% / 49% | 100% / 100% / 100% | 49% / 49% / 49% | 0% / 0% / 0% | 55% / 55% / 55% | 0% / 0% / 0% | 6% / 6% / 6% |
+| late-payment share (-25% / +25%) | 0 pp | 0% / 0% / 0% | 49% / 49% / 49% | 100% / 100% / 100% | 49% / 49% / 49% | 0% / 0% / 0% | 55% / 55% / 55% | 0% / 0% / 0% | 6% / 6% / 6% |
+| leisure cap (-25% / +25%) | 0 pp | 0% / 0% / 0% | 49% / 49% / 49% | 100% / 100% / 100% | 49% / 49% / 49% | 0% / 0% / 0% | 55% / 55% / 55% | 0% / 0% / 0% | 6% / 6% / 6% |
+| NET factor (fixed; reference only) (-25% / +25%) | (reference) | 0% / 0% / 0% | 44% / 49% / 47% | 89% / 100% / 100% | 51% / 49% / 47% | 0% / 0% / 0% | 5% / 55% / 94% | 0% / 0% / 0% | 19% / 6% / 2% |
 
-**What moves the results most**
-1. **NET factor** (±25% shifts careful's median end value from $1,333 to $3,911; book-heavy bankruptcy from 70% to
-   8%). Tax handling is the strongest economic lever. If the game shows a "tax jar", its rate is a key balance
-   number.
-2. **Rent** and **starting cash** are almost mirror images. Each moves book-heavy bankruptcy by 20+ percentage
-   points.
-3. **Offer rate.** It mainly affects the grinder's stress, since more offers mean more overwork, and book-heavy
-   bankruptcy.
+**What moves the endings**
+- **H** is by far the strongest lever for careful's endings: 95% → 0% book finished over ±25%.
+- **Starting cash, rent and effect sizes** decide book-heavy's best ending (15–88% over ±25% cash).
+- **Careless's parents' ending** moves most with starting cash and rent (2–14%). Even at −25% cash it stays far
+  below 60%.
 
-**Little effect**
-- **Late-payment share and the story job's size** change almost nothing. The late share is mostly absorbed by
-  lifelines, and the story job is often not taken.
+**What barely matters**
+- **The loan window** (5 or 9 days), the parents' floor (±25%), payment delays, the late-payment share and the
+  leisure cap move every ending by ≤ 3 points. At this cash the loan is rarely the deciding factor. The
+  recommended floor of −$100 is much more than −25%; §10 shows its effect.
+- **NET (reference only)** would still be the strongest money lever if it were tunable. Book-heavy's best ending
+  goes 5% → 94% over ±25%.
 
-**Book-finishing is a cliff**
-- With 25% less remaining work, careful finishes the book in 100% of runs. With 25% more, in 0%.
-- The careful policy's ~1.5–2.5 h/day book budget lands right on the 60–80 h range, so the book target is very
-  sensitive to the starting-progress range.
+## 9. Comparison with round 1
 
-## 7. Recommended changes and re-run
+Round 1 (spec v0.2, `SIM_REPORT_round1.md`): starting cash $1,400, book unpaid, with effects. Round 2: tuned config, with effects, story job declinable. Round 1's "bankrupt" is compared with round 2's parents' ending; the two rules differ (§6). Round 1's effect boost counted efficiency × throughput only; round 2's also counts rate effects.
 
-The changes live in `data/economy.recommended.yaml` as an overlay on `data/economy.yaml`. They are **not** merged into `economy.yaml` yet, pending the owner's review.
+| Policy | Bankrupt → parents' ending | Book finished | End value (median) | Low in d28-35 | Effects held | Effect boost (avg) | Job payment every week | Story job taken | Paid hours |
+|---|---|---|---|---|---|---|---|---|---|
+| Careful | 1% → 0% | 63% → 49% | 2,625 → 3,288 | 58% → 67% | 11.0 → 10.5 | +24% → +8% | 41% → 73% | 48% → 88% | 181 → 189 |
+| Book-heavy | 26% → 0% | 100% → 100% | 737 → 1,562 | 58% → 94% | 10.9 → 10.4 | +21% → +4% | 27% → 48% | 22% → 89% | 117 → 126 |
+| Grinder | 1% → 0% | 0% → 0% | 3,290 → 6,062 | 28% → 8% | 11.7 → 13.2 | +27% → +17% | 50% → 94% | 89% → 96% | 345 → 357 |
+| Careless | 76% → 6% | 0% → 0% | -104 → 483 | 40% → 38% | 9.8 → 8.2 | +19% → +5% | 20% → 61% | 70% → 69% | 157 → 161 |
+| Greedy-optimal* | 0% → 0% | 0% → 0% | 5,690 → 5,533 | 8% → 15% | 11.0 → 10.8 | +24% → +15% | 53% → 92% | 30% → 62% | 331 → 316 |
 
-| Config key | Baseline | Recommended | Why | Expected effect |
+**What changed and why**
+- **Bankrupt → parents' ending:** 76% → 6% for careless, 26% → 0% for book-heavy.
+  1. The loan is a gentler last resort than round 1's "bankrupt below 0 after lifelines".
+  2. Starting cash is higher ($1,900 vs $1,400), because book-heavy's best ending now needs ≥ $1,500 at the end
+     and the book pays no advance.
+- **Feedback:** careful 41% → 73% of runs with a job payment every week. The day-1 job and the regular clients'
+  faster terms fill weeks 1 and 5–6.
+- **Story job taken:** careful 48% → 88% (it is now "hard to refuse").
+- **Effects are smaller and more varied:** effect boost +24% → +8%; no effect in every top-decile run.
+- **Book:** careful's finish rate 63% → 49%. It is now set by H, with only 📖 effects helping.
+
+## 10. Recommended changes and re-run
+
+The changes live in `data/economy.recommended.yaml` as an overlay on the tuned config. They are **not** merged into `economy.yaml`, pending the owner's review.
+
+| Config key | Tuned value | Recommended | Why | Expected effect |
 |---|---|---|---|---|
-| effects.work_milestone_every | 4 | 8 | Jobs are mostly small (careful finishes ~24 per run), so 'every 4th job' gave ~5.6 work-milestone offers per careful run vs. the ~2-3 the spec expects (§8.1). | Work-milestone offers ~2.4 per careful run (in the §8.1 range). Effect boost and income fall slightly, so book-heavy needs a little more starting cash (next row). |
-| pre_move_receivables (day 6 -> 4) | 600 on day 6 | 600 on day 4 | In 30% of careful runs the lowest cash is day 5 (supplies + vet in week 1, before the first invoice), not the convergence week. | Careful's lowest cash moves into days 28-35 more often (target >= 60%); week 1 still gets a payment. No change to total money. |
-| start.cash | 1400 | 1450 | Re-balances book-heavy bankruptcy after the effect change (fewer effects -> less output). | Book-heavy bankruptcy back to ~30% (edge of the 15-30% band); careful stays <= 2%. Kept below 1500 because the careful policy buys headphones on day 1 at >= 1500, which re-creates the week-1 low (see Open issues). |
+| start.cash | 1900 | 2000 | The two effect changes below (Saturday class, fewer milestone offers) lower book-heavy's end money, and with it the best ending (55% -> ~40% at 1,900). | Book-heavy best back to ~50% (target 45-55%); careless parents' ending ~18% instead of ~22%. |
+| lifelines.parents_floor | -300 | -100 | Once her loan is used, a careless player can sit between -300 and 0 for many days without consequence; careless reaches the parents' ending in only ~6% of runs (target >= 60%). | Careless parents' ending rises to ~20% at the tuned starting cash (~60-70% at a starting cash of 1,100-1,200). Careful and grinder stay at ~0%. |
+| lifelines.borrow_max | 800 | 400 | An 800 loan covers almost any shortfall, so the loan rarely leads anywhere. A smaller loan keeps it a real but limited rescue. | Together with the floor: more careless and some book-heavy runs end with the parents; careful unaffected (it almost never borrows). |
+| effects.work_milestone_every | 8 | 12 | Careful holds ~10.5 effects at the end (target 7-9); about 2.4 of its ~10 picks come from work milestones. | Careful ~9.6 effects, grinder ~12. Still above 9: the rest needs a design decision (fewer weekly offers or a 'skip' choice). |
+| effects.pool.side_class.saturday_income | 100 | 60 | +$100 net for 4 hours (~$25/h) pays better than translation (~$24/h net) with no deadline; careful picks it ~96% of the time when offered and it is the most common effect in careful's top decile (86%, limit 70%). | Pick rate ~76%; still attractive but no longer near-automatic. |
+| effects.pool.neighbor_sitter.price_per_use | 25 | 0 | Dead effect (picked ~3% when offered): $25 for one day of care a week is worth little to players who already meet the pet's needs. The spec's alternative cost (2 h of help on Sunday) is not modeled. | Careful picks it ~40% of the time when offered. |
 
-**Expected and observed effect.** After the changes, careful's low point falls in the convergence week in 64% of
-runs. Work-milestone offers drop to ~2.4 per careful run, inside the §8.1 range. Effect boost falls slightly
-(careful +22% average / +27% at the end). Book-heavy bankruptcy rises with fewer effects, and $1,450 brings it
-back to 30.2%. That sits at the edge of the band; at 2,000 seeds the sampling error is about ±1 point.
-
-**Why $1,450 and not $1,500.** At $1,500 the careful policy's shop rule buys headphones on day 1, and its low point
-slips back to 59% in days 28–35. The window that meets both targets is narrow (~$1,450–1,500). The recommended
-changes do not fix the effect-pool problem, which needs content (§8).
+The overlay keeps the owner's decisions as they are: no change to the $1,500 finance bar, the targets or the
+loan window. Without them, the cash trade-off can't be removed (§11).
 
 ### Acceptance targets with the recommendations
 
-| Policy | Target | Result | Met |
-|---|---|---|---|
-| Careful | Bankrupt <= 8% | 1.1% | yes |
-| Careful | Lowest cash in days 28-35 in >= 60% of runs | 63.6% | yes |
-| Careful | Book finished >= 30% | 62.1% | yes |
-| Book-heavy | Bankrupt 15-30% | 30.2% | **no** |
-| Book-heavy | Book finished >= 70% | 100.0% | yes |
-| Grinder | Bankrupt <= 5% | 0.8% | yes |
-| Grinder | Stress > 70 on >= 40% of days in weeks 4-5 | 81.9% of days (mean) | yes |
-| Grinder | Relationship needs missed >= 2 weeks | 5.4 weeks (mean) | yes |
-| Careless | Bankrupt >= 60% | 74.7% | yes |
-| Greedy-optimal* | Does not dominate the combined ending | good combined ending in 0.0% of runs | yes |
-| effects | No single effect in > 70% of top-decile runs | highest: cat_tool (careful) 100% | **no** |
-| effects | No combo exceeds caps (no designed synergies exist yet) | caps enforced by clamping; the efficiency cap was reached in 32.4% of runs | yes |
-| Careful | Feedback: a job payment in each of weeks 1-6 (>= 90% of runs) | 40% (incl. pre-move invoices: 96%) | **no** |
-| Book-heavy | Feedback: a job payment in each of weeks 1-6 (>= 90% of runs) | 26% (incl. pre-move invoices: 90%) | **no** |
-| Grinder | Feedback: a job payment in each of weeks 1-6 (>= 90% of runs) | 49% (incl. pre-move invoices: 92%) | **no** |
-| Careless | Feedback: a job payment in each of weeks 1-6 (>= 90% of runs) | 20% (incl. pre-move invoices: 80%) | **no** |
-| Greedy-optimal* | Feedback: a job payment in each of weeks 1-6 (>= 90% of runs) | 52% (incl. pre-move invoices: 98%) | **no** |
+Main variant (with effects, story job declinable): **17 of 31 met.** The right-hand columns repeat the check with the story job always taken.
 
-With the small book advance: Careful bankrupt 0%, book finished 62%; Book-heavy bankrupt 2%, book finished 100%.
+| Policy | Target | Result (declinable) | Met | Result (always taken) | Met |
+|---|---|---|---|---|---|
+| Careful | Finishes book ~40-50% | 47.9% | yes | 39.4% | **no** |
+| Careful | Best ~25-35% | 47.9% | **no** | 39.4% | **no** |
+| Careful | Good or better ~70-80% | 99.9% | **no** | 100.0% | **no** |
+| Careful | Parents' ending <= 8% | 0.0% | yes | 0.0% | yes |
+| Book-heavy | Finishes book ~85-95% | 100.0% | **no** | 100.0% | **no** |
+| Book-heavy | Best ~45-55% | 50.1% | yes | 55.2% | **no** |
+| Book-heavy | Good or better ~60-70% | 50.1% | **no** | 55.2% | **no** |
+| Book-heavy | Parents' ending 15-30% | 0.0% | **no** | 0.0% | **no** |
+| Grinder | Finishes book ~0% (<= 2%) | 0.0% | yes | 0.0% | yes |
+| Grinder | Best 0% | 0.0% | yes | 0.0% | yes |
+| Grinder | Good or better <= 10% | 0.0% | yes | 0.0% | yes |
+| Grinder | Parents' ending <= 5% | 0.0% | yes | 0.0% | yes |
+| Careless | Finishes book ~0-5% | 0.0% | yes | 0.0% | yes |
+| Careless | Best ~0% (<= 2%) | 0.0% | yes | 0.0% | yes |
+| Careless | Good or better <= 10% | 0.0% | yes | 0.0% | yes |
+| Careless | Parents' ending >= 60% | 17.4% | **no** | 16.2% | **no** |
+| Greedy-optimal* | Best 0% | 0.0% | yes | 0.0% | yes |
+| Greedy-optimal* | Good or better 0% | 0.0% | yes | 0.0% | yes |
+| Careful | Lowest cash in days 28-35 in >= 60% of runs | 71.1% | yes | 74.1% | yes |
+| Careful | Holds 7-9 effects at the end | 9.6 | **no** | 9.5 | **no** |
+| Grinder | Holds 5-6 effects (or its natural count; report) | 11.9 | **no** | 11.9 | **no** |
+| Careless | Holds 5-6 effects (or its natural count; report) | 7.8 | **no** | 7.7 | **no** |
+| Effects | No single offered effect in > 70% of top-decile runs (any policy) | highest: specialist_niche for careful, 70% | yes | highest: specialist_niche for careful, 70% | yes |
+| Careful | CAT tool picked 40-60% of the time when offered | 46% | yes | 46% | yes |
+| Effects | No dead effects | deposit_terms, sunday_brunch | **no** | deposit_terms, sunday_brunch | **no** |
+| Careful | Effect boost: average +10-20% | +7.2% | **no** | +6.8% | **no** |
+| Careful | Effect boost: last 5 workdays +20-35% | +11.2% | **no** | +10.8% | **no** |
+| Careful | Feedback: a job payment in each of weeks 1-6 in >= 90% of runs | 73% | **no** | 69% | **no** |
+| Book-heavy | Feedback: a job payment in each of weeks 1-6 in >= 90% of runs | 48% | **no** | 45% | **no** |
+| Grinder | Feedback: a job payment in each of weeks 1-6 in >= 90% of runs | 94% | yes | 93% | yes |
+| Careful | Story job accepted in >= 70% of runs (declinable) | 88% | yes | 100% | yes |
 
-**Notes on the misses**
-- **Careful low point (58%).** Just short of target; the recommendation in §7 fixes it.
-- **Effects dominance (100%).** Structural (§5).
-- **Feedback.** Met for every working policy only if pre-move invoices count (careless reaches 82%, which is
-  acceptable for a strategy meant to fail).
-- **Caps.** No combination can exceed a cap, because the code clamps each category. But the efficiency cap
-  (+40%) is reached in 44% of all runs (99.7% of careful runs), mostly via morning person plus
-  context switcher or deep focus plus coworking. This is fine while no designed synergies exist.
+### Endings with the recommendations
 
-### Summary per policy with the recommendations
+Tier shares of all runs; goal rates over all runs (a parents' run is measured up to its last day). "Most missed" counts runs that did not end with the parents. *Greedy-optimal is search-based and reads the run's future offers.
 
-All values are means or shares over runs unless marked median. "End value" = cash + 0.9 x receivables - debts. "Good combined ending" = not bankrupt, <= 1 relationship week missed, <= 4 pet-care deficit days, <= 6 days with stress > 70 (simulator definition, see Open issues). *Greedy-optimal is search-based and reads the run's future offers.
+### With effects, story job declinable (main)
 
-### With effects, book unpaid
+| Policy | Best | Good | Mixed | Hard | Parents | Good or better | Goal: pet | Goal: relationship | Goal: book | Goal: stress | Goal: finances | Most missed goal (share of all runs) | Book near-finished |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Careful | 48% | 52% | 0% | 0% | 0% | 100% | 100% | 100% | 48% | 100% | 100% | book (52%) | 37% |
+| Book-heavy | 50% | 0% | 50% | 0% | 0% | 50% | 100% | 100% | 100% | 100% | 50% | finances (50%) | 0% |
+| Grinder | 0% | 0% | 0% | 100% | 0% | 0% | 0% | 0% | 0% | 83% | 100% | book (100%) | 0% |
+| Careless | 0% | 0% | 0% | 83% | 17% | 0% | 0% | 0% | 0% | 100% | 5% | book (83%) | 0% |
+| Greedy-optimal* | 0% | 0% | 0% | 100% | 0% | 0% | 0% | 0% | 0% | 82% | 100% | book (100%) | 0% |
 
-| Policy | Bankrupt | Crisis | Lifelines used | Lowest cash (median) | Low in d28-35 | End value median (p10 / p90) | Days stress>70 | Stress>70 share wk4-5 | Illness days | Rel. weeks missed | Pet deficit days | Book milestones | Book finished | Book hours | Effects held | Paid hours | Jobs done | Jobs late | Good combined ending |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| Careful | 1% | 28% | 0.31 | 382 | 64% | 2,557 (1,822 / 3,318) | 0.0 | 0% | 0.00 | 0.0 | 0.0 | 2.62 | 62% | 65 | 10.8 | 180 | 23.7 | 0.0 | 99% |
-| Book-heavy | 30% | 77% | 1.22 | -286 | 56% | 706 (50 / 1,316) | 0.0 | 0% | 0.00 | 0.0 | 0.0 | 3.00 | 100% | 68 | 10.8 | 117 | 18.8 | 0.1 | 70% |
-| Grinder | 1% | 15% | 0.19 | 536 | 35% | 3,142 (1,920 / 4,653) | 22.3 | 82% | 2.17 | 5.4 | 16.9 | 0.00 | 0% | 0 | 9.5 | 344 | 23.4 | 0.9 | 0% |
-| Careless | 75% | 97% | 1.47 | -934 | 38% | -123 (-884 / 583) | 0.0 | 0% | 0.00 | 4.4 | 16.8 | 0.11 | 0% | 17 | 7.8 | 157 | 14.1 | 8.3 | 0% |
-| Greedy-optimal* | 1% | 6% | 0.07 | 530 | 11% | 5,470 (3,763 / 7,008) | 1.8 | 6% | 0.06 | 6.0 | 42.0 | 0.00 | 0% | 0 | 10.0 | 328 | 27.9 | 0.1 | 0% |
+### With effects, story job always taken
 
-### With effects, book small advance
-
-| Policy | Bankrupt | Crisis | Lifelines used | Lowest cash (median) | Low in d28-35 | End value median (p10 / p90) | Days stress>70 | Stress>70 share wk4-5 | Illness days | Rel. weeks missed | Pet deficit days | Book milestones | Book finished | Book hours | Effects held | Paid hours | Jobs done | Jobs late | Good combined ending |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| Careful | 0% | 6% | 0.06 | 756 | 38% | 3,415 (2,631 / 4,143) | 0.0 | 0% | 0.00 | 0.0 | 0.0 | 2.62 | 62% | 65 | 10.8 | 180 | 23.7 | 0.0 | 100% |
-| Book-heavy | 2% | 14% | 0.18 | 541 | 42% | 1,676 (1,029 / 2,281) | 0.0 | 0% | 0.00 | 0.0 | 0.0 | 3.00 | 100% | 68 | 10.9 | 117 | 18.9 | 0.1 | 98% |
-| Grinder | 1% | 15% | 0.19 | 536 | 35% | 3,142 (1,920 / 4,653) | 22.3 | 82% | 2.17 | 5.4 | 16.9 | 0.00 | 0% | 0 | 9.5 | 344 | 23.4 | 0.9 | 0% |
-| Careless | 74% | 96% | 1.46 | -919 | 39% | -96 (-874 / 637) | 0.0 | 0% | 0.00 | 4.4 | 16.8 | 0.11 | 0% | 17 | 7.8 | 157 | 14.1 | 8.3 | 0% |
-| Greedy-optimal* | 1% | 6% | 0.07 | 530 | 11% | 5,470 (3,763 / 7,008) | 1.8 | 6% | 0.06 | 6.0 | 42.0 | 0.00 | 0% | 0 | 10.0 | 328 | 27.9 | 0.1 | 0% |
-
-### No effects (control), book unpaid
-
-| Policy | Bankrupt | Crisis | Lifelines used | Lowest cash (median) | Low in d28-35 | End value median (p10 / p90) | Days stress>70 | Stress>70 share wk4-5 | Illness days | Rel. weeks missed | Pet deficit days | Book milestones | Book finished | Book hours | Effects held | Paid hours | Jobs done | Jobs late | Good combined ending |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| Careful | 4% | 43% | 0.57 | 103 | 64% | 1,722 (1,079 / 2,375) | 0.0 | 0% | 0.00 | 0.0 | 0.0 | 2.23 | 23% | 64 | 0.0 | 179 | 17.6 | 0.2 | 96% |
-| Book-heavy | 47% | 85% | 1.41 | -430 | 43% | 287 (-301 / 847) | 0.0 | 0% | 0.00 | 0.0 | 0.0 | 3.00 | 100% | 71 | 0.0 | 114 | 14.8 | 0.5 | 53% |
-| Grinder | 2% | 20% | 0.25 | 557 | 49% | 2,046 (1,054 / 3,074) | 22.5 | 83% | 2.22 | 5.2 | 16.9 | 0.00 | 0% | 0 | 0.0 | 349 | 17.3 | 2.0 | 0% |
-| Careless | 77% | 97% | 1.35 | -894 | 31% | -219 (-891 / 429) | 0.0 | 0% | 0.00 | 4.4 | 16.8 | 0.04 | 0% | 17 | 0.0 | 157 | 12.1 | 7.3 | 0% |
-| Greedy-optimal* | 1% | 9% | 0.11 | 676 | 23% | 4,184 (3,007 / 5,381) | 2.7 | 9% | 0.11 | 6.0 | 42.0 | 0.00 | 0% | 0 | 0.0 | 333 | 21.6 | 0.3 | 0% |
-
-### No effects (control), book small advance
-
-| Policy | Bankrupt | Crisis | Lifelines used | Lowest cash (median) | Low in d28-35 | End value median (p10 / p90) | Days stress>70 | Stress>70 share wk4-5 | Illness days | Rel. weeks missed | Pet deficit days | Book milestones | Book finished | Book hours | Effects held | Paid hours | Jobs done | Jobs late | Good combined ending |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| Careful | 1% | 13% | 0.14 | 641 | 51% | 2,437 (1,775 / 3,118) | 0.0 | 0% | 0.00 | 0.0 | 0.0 | 2.23 | 23% | 64 | 0.0 | 179 | 17.6 | 0.2 | 99% |
-| Book-heavy | 3% | 21% | 0.28 | 395 | 40% | 1,265 (681 / 1,812) | 0.0 | 0% | 0.00 | 0.0 | 0.0 | 3.00 | 100% | 71 | 0.0 | 114 | 14.8 | 0.5 | 97% |
-| Grinder | 2% | 20% | 0.25 | 557 | 49% | 2,046 (1,054 / 3,074) | 22.5 | 83% | 2.22 | 5.2 | 16.9 | 0.00 | 0% | 0 | 0.0 | 349 | 17.3 | 2.0 | 0% |
-| Careless | 76% | 97% | 1.35 | -888 | 32% | -210 (-876 / 452) | 0.0 | 0% | 0.00 | 4.4 | 16.8 | 0.04 | 0% | 17 | 0.0 | 157 | 12.1 | 7.3 | 0% |
-| Greedy-optimal* | 1% | 9% | 0.11 | 676 | 23% | 4,184 (3,007 / 5,381) | 2.7 | 9% | 0.11 | 6.0 | 42.0 | 0.00 | 0% | 0 | 0.0 | 333 | 21.6 | 0.3 | 0% |
-
+| Policy | Best | Good | Mixed | Hard | Parents | Good or better | Goal: pet | Goal: relationship | Goal: book | Goal: stress | Goal: finances | Most missed goal (share of all runs) | Book near-finished |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Careful | 39% | 61% | 0% | 0% | 0% | 100% | 100% | 100% | 39% | 100% | 100% | book (61%) | 35% |
+| Book-heavy | 55% | 0% | 45% | 0% | 0% | 55% | 100% | 100% | 100% | 100% | 55% | finances (45%) | 0% |
+| Grinder | 0% | 0% | 0% | 100% | 0% | 0% | 0% | 0% | 0% | 80% | 100% | book (100%) | 0% |
+| Careless | 0% | 0% | 0% | 84% | 16% | 0% | 0% | 0% | 0% | 100% | 5% | book (84%) | 0% |
+| Greedy-optimal* | 0% | 0% | 0% | 100% | 0% | 0% | 0% | 0% | 0% | 84% | 100% | book (100%) | 0% |
 
 ![Cash over time, recommended](charts/cash_over_time_recommended.png)
 
 ![Lowest cash day, recommended](charts/lowest_cash_day_recommended.png)
 
-### Effects with the recommendations
+**Result:** 17 of 31 targets met (main variant), up from 16.
+- **Now met:** "no effect in > 70% of the top decile". Specialist niche is the highest, at exactly 70%.
+- **Better but still missed:**
+  - careless's parents' ending, 6% → 17%;
+  - careful's effect count, 10.5 → 9.6.
+- **Book-heavy's best ending** stays in band (50%) thanks to the +$100 starting cash.
+- **Dead effects:** the neighbor is revived. Sunday brunch slips from 10% to just under 10% and now counts as dead.
+- **Unchanged:** feedback, effect boost and the structural ending conflicts.
 
-| Policy | Held at end | Boost avg / end | Most common effect in top decile |
-|---|---|---|---|
-| Careful | 10.8 | +22% / +27% | cat_tool 100% |
-| Book-heavy | 10.8 | +18% / +24% | cat_tool 100% |
-| Grinder | 9.5 | +23% / +31% | cat_tool 100% |
-| Careless | 7.8 | +15% / +29% | morning_pages 75% |
-| Greedy-optimal* | 10.0 | +21% / +28% | cat_tool 100% |
+A probe (500 seeds per point, not part of the committed run) shows what the finance bar would do. With the
+overlay's floor and loan cap, $1,200 starting cash and a $750 finance-good bar:
+- careless parents' ending ~62%;
+- book-heavy best ~51%;
+- careful and grinder parents' ending ≤ 1%.
 
+That meets 11 of the 16 ending rows vs. 9 here. It needs the owner to lower the bar from "about one month's rent"
+(§11).
 
-## 8. Open issues
+## 11. Open issues
 
 ### Needs an owner decision
+1. **Careful's ending targets assume it sometimes misses a non-book goal; in the simulation it never does.** Careful
+   meets her and the pet by definition (round-1 policy), and the stress numbers keep its stress near 0. Best 25–35%
+   with good-or-better 70–80% means ~25% of careful runs miss pet, relationship, stress or finances. Options:
+   - make careful's schedule imperfect (e.g. it sometimes misses an evening in her crunch weeks);
+   - make convergence-week stress bite (larger deadline/rush stress, or weaker leisure relief);
+   - relax careful's good-or-better target.
+2. **Book-heavy always finishes the book** (~117 planned book hours vs. H = 67.5). The 85–95% target, and "good or
+   better" above "best", need either fewer book-heavy hours or a larger book for it. H is tuned for careful by
+   spec (§10.2).
+3. **Book-heavy's best ending vs. its parents' risk vs. careless's parents' ending.** The $1,500 finance bar ties
+   book-heavy's best ending to high starting cash. High cash removes the parents' ending for both book-heavy and
+   careless. Options:
+   - lower the finance-good bar (a probe at $750 with $1,200 cash meets both book-heavy's best and careless's
+     parents' target, §10);
+   - accept a careless parents' rate well below 60%;
+   - accept book-heavy's best below 45%.
+4. **Loans taken after day 35 can't come due within the run.** A late crisis (often the deferred day-31 rent
+   falling due on day 38) ends with debt, so finances "okay", but never the parents. Should the parents' ending
+   also trigger when a loan is open on day 42, or should the window shorten near the end?
+5. **Feedback in weeks 2–4.** The story job (12,500 words, paid day 33) crowds out paid work, so careful gets a job
+   payment every week in 73% of runs (target 90%). Options:
+   - pay part of the story job on delivery;
+   - make it smaller (the sensitivity sweep shows ±25% size barely changes endings);
+   - accept the gap as the intended cash-flow squeeze.
+6. **Effect count and effect boost.** Careful holds 10.5 effects (target 7–9) and gets +8% boost (target +10–20%).
+   Fewer offers (work milestones every 12th job, §10) only reach 9.6. Options: fewer weekly reflections, a
+   "skip" choice, or a lower target. The boost target was set before the effects were made smaller; it needs
+   restating, or the effect sizes need raising.
+7. **Deposit terms is dead under every policy rule.** Liquidity is worth little to players who rarely run out of
+   cash. Rework it, e.g. deposits on all large and medium jobs, or no offer penalty.
 
-1. **The effect pool is too small for the offer schedule (§5).** With 12 effects and ~11–14 picking chances per
-   careful run, everyone ends with nearly the full pool, and the "no effect in > 70% of the top decile" target
-   can't be met by tuning. Options:
-   - grow the pool to ~25–30 effects;
-   - cut offer sources (e.g. weekly reflections only in weeks 1, 3 and 5);
-   - let the player skip a pick.
-2. **The feedback target counts which payments?** Job payments alone can't arrive in week 1 under the 7-day
-   agency terms, except for direct clients. Counting pre-move invoices, the target is met. If job-only is meant,
-   week 1 needs a fixed early direct-client job or shorter agency terms.
-3. **Is the week-2 story job forced?** It is simulated as an ordinary day-8 offer that policies may decline, so the
-   intended week-5 squeeze only happens in ~48% of careful runs. If it is a fixed story event, the game should
-   make taking it (near) certain. That would make careful's convergence-week low more reliable.
-4. **Book advance and starting cash interact.** The advance makes book-heavy almost risk-free (1% bankrupt). Even
-   at $800 starting cash it stays at 12%, below the 15–30% band. If the advance is kept, the book-heavy target
-   (or the advance size) needs revisiting, not just the starting cash.
-5. **Neglect has no money cost** beyond the pet bill tier. Greedy-optimal and the grinder show that ignoring her
-   and the pet is the money-maximizing play. This is consistent with the design ("relationship is not a function
-   of money"), so the ending and story events must make that cost felt.
-6. **Book-heavy bankruptcy with the recommendations is 30.2%** (ceiling 30%). Either accept this as within
-   sampling noise, or nudge starting cash toward $1,500. The latter pushes careful's low-point share back below 60%.
+### Interpretation choices (simplest reasonable reading; review)
+**Targets and metrics**
+- Target wording: "~a–b%" = the range; "0%" = below 0.5% of runs; "~0%" = at most 2%; "~0–5%" = at most 5%.
+- **Top-decile check** counts only effects picked from offers. Shop buys follow fixed policy rules, so a policy
+  buying headphones in every run would otherwise fail it mechanically. **Dead-effect check** ignores careless,
+  which picks at random (~33%).
+- **Feedback:** deposits count as job payments; side-class income and pre-move invoices don't. A run that ends
+  early (parents) misses the weeks after its end.
+- **Effect boost on paid work** = efficiency × throughput × rate effects per paid hour (round 1: efficiency ×
+  throughput).
 
-### Degenerate strategies, dead or dominant effects
+**Endings and goals**
+- Goals are measured up to the last day of a parents' run. If it ended before day 36, the stress goal uses its
+  last 7 days. "Most missed goal" counts non-parents runs.
+- **Pet goal** uses weighted deficit days (walk routine doubles a skipped day, per §8.4).
+- **Relationship goal:** "any loan repaid on time" can only fail through the loan parents' ending; a loan still
+  open on day 42 that is not yet due does not fail it (finances do).
+- **"No debt left"** includes deferred rent.
 
-- **Grinding is financially safe** (≈1% bankrupt). It earns only ~25% more than careful, because stress cuts
-  efficiency, but money alone never punishes it.
-- **Her spreadsheet** does nothing mechanically in the simulation (no policy uses a forecast).
-- **Fast invoicer and night owl** are weak picks.
-- **The CAT tool** is a near-automatic pick, because its category has no cap and its price is low.
-- **The efficiency cap (+40%) is reached often.** Stacking morning person, deep focus and coworking already hits
-  it, so further efficiency picks are wasted.
+**Policies, the loan and the parents' ending**
+- **Story job "hard to refuse":** careful, book-heavy and grinder take it if it fits with their planned + extra
+  hours (not just planned hours); careless takes it at its usual 70% chance. Policies' definitions are otherwise
+  unchanged from round 1.
+- **Lifelines:** borrowing is always the last lifeline for every policy (careless shuffled it in round 1). "No
+  lifeline left" = rent-late not possible today, early payment used or no job invoice outstanding, and borrowing
+  used.
+- **Loan repayment:** partial repayments are allowed, keeping 2 days of costs. On the due day a policy pays all
+  the cash it has.
 
-### Interpretation choices (simplest reading; please check)
-
-**Time and stress**
-- *Leisure for stress relief* = free hours left after sleep, routines (2 h), a 1 h lunch on workdays, paid work,
-  book, pet care and time with her, capped at 4 h/day (`day.leisure_hours_cap`). Time with her always counts.
-  Without a cap, a day off would remove ~25 stress points.
-- *Interruptions* (0–25%) remove both paid and book time. Half of them count as pet interruptions (for the
-  coworking pass).
-- *"Each consecutive short night after the first"* adds +3 once per night while the streak is at least 2.
-- *"Deadline due tomorrow"* is +5 per job.
-- *"A rush job in progress"* is +2 per day if any rush job is active.
-- *Sleep* is the night after the day. Cutting it lowers the next day's efficiency.
-
-**Offers and jobs**
-- *Deadlines* are counted in working days, rounded up: est. hours ÷ 6 × U(1.1, 1.8), minimum 1. A job is due at
-  the end of that working day. Missing the deadline marks it late (−20% payment). Work continues until delivery.
-- *Rush jobs* aren't specified, so they were set as follows: 15% of non-PE offers; deadline × 0.5; rate × 1.25.
-- *Post-editing* pays $0.055/word for all clients.
-- *The PE switch day* is uniform over days 8–21. The PE share is 25% before the switch and rises linearly to 50% by
-  day 36.
-- *Reputation* is tracked per client type, as there are no individual clients. For 7 days after a missed deadline,
-  each offer from that type is dropped with 50% chance and pays × 0.9.
-- *Direct-client network* = a second, independent stream of direct-client offers (doubling them). Each direct job
-  gets +1 h of unpaid revision work.
-
-**Payments and lifelines**
-- *Payments:* direct clients pay after 2–3 days (uniform), agencies after 7, slow agencies after 14. A 20% chance
-  of +3–7 days late is drawn per job, independent of the player.
-- *The story job* is a fixed day-8 offer: 12,500 words, standard agency, normal deadline formula. It is paid on
-  day 33, or 7 days after delivery if that is later.
-- *Crisis and bankruptcy*, checked at end of day:
-  1. If rent fell due today and rent-late is unused, it is deferred first (+$75, due within 7 days).
-  2. If cash is still below −$300 → bankrupt.
-  3. Otherwise the policy uses "pay early" (job invoices only, −10% of the smallest invoice that covers the gap)
-     and/or "borrow" (gap + $200, up to $800).
-  4. Still negative → bankrupt.
-- *After bankruptcy*, the run continues to day 42 with no lifelines left. Her loan is not repaid in-run; it counts
-  as debt in the end value, as does unpaid deferred rent.
-
-**Costs and the pet**
-- *Transformation bill* tier odds (300/500/800) depend on pet-care deficit days before day 30: 0 days →
-  60/30/10%; 1–3 days → 30/40/30%; 4+ days → 10/40/50%.
-- *Pet damage:* each deficit day has a 25% chance of a $20–150 damage cost.
-- *Walk routine:* a skipped walk counts as 2 deficit days.
-- *Stress illness:* stress above 85 for 2+ days gives a 15% daily chance of an illness day (no work, $0–80).
+**Clients and jobs**
+- **Regular clients:**
+  - jobs are never rush;
+  - A's sizes are 15/70/15% small/medium/large ("mostly medium"); C's are medium/large in the random-offer ratio;
+  - the usual day ±1 is clamped to weekdays;
+  - "+50% jobs" (loyal client) is an independent second weekly draw at the same chance, visible only with the effect.
+- **The PE share of random offers** starts rising on A's switch day and reaches 50% on day 36 (as in v0.2).
+- **Day-1 job:** paid exactly 2 days after delivery (no lateness), at B's rate (+10%).
 
 **Effects**
-- *Shop:* headphones and the coworking pass are shop-only and never drawn in offers. Coworking costs $60/week from
-  purchase and adds 0.5 h of pet care on days worked there. CAT tool and coworking fees are charged weekly from
-  the day they are taken.
-- *Morning person / night owl:* the first 4 work hours of a day count as "before 13:00"; hours beyond 8 count as
-  "after 19:00". Paid work comes first in the day, then the book.
-- *Deep focus* counts paid projects only. *Context switcher* counts paid projects plus the book as tasks.
-- *Efficiency bonuses* also apply to book hours. The CAT tool does not.
-- *Late-offer lean (§8.2):* from day 22, efficiency and throughput effects are drawn at half weight.
-- *Morning pages'* 30 minutes come out of free time. Its book relief (3.5) is under the +50% stress-relief cap
-  (3.75).
-- *The work-milestone offer* fires on every 4th delivered job, the story job included.
+- **Effect details where the spec is short:**
+  - Deep focus changes book speed only on days with exactly one paid project.
+  - The book cap (+20%) covers all 📖 speed changes, including deep focus and pe_veteran's −5%.
+  - The writing group's "double" relief is capped by the +50% stress-relief cap.
+  - An hour of quiet company relieves 1 in total (not her 2 + book 2.5).
+  - Reading aloud's +0.5 relief applies to all book hours.
+  - Termbase's +2 h applies to the first job accepted from each regular client after taking it.
+  - Specialist niche's −20% applies to random offers only; deposit terms' −25% to all non-fixed large offers.
+  - Shared calendar adds Friday to her crunch-week evenings.
+  - A "skipped planned evening" = a planned 2 h evening trimmed below 2 h when the day overflowed.
+  - Sunday planning works from the day after the first Sunday after it is taken.
+  - Puppy class's Saturday hours apply in weeks 2–4 whenever it is held.
+  - The neighbor is used once a week on the first day the policy is behind or short on care, paid in money.
+  - The Saturday class's 4 h count as paid hours for stress, so that Saturday loses the no-paid-work relief.
+  - The nap happens when stress is above 50 at the start of the day.
+  - Boundaries caps paid work at 8 h/day.
+  - Rush specialist's 1.4× rush rate counts as +12% in the rate cap.
+- **`size_scale`** (sensitivity "effect sizes") scales every up/downside, not prices, time costs, hours or days.
+  Extra-offer multipliers above 2× can't be represented.
 
-**Book**
-- *Remaining work* maps linearly from starting progress: 75% done → 60 h left, 60% done → 80 h left. The
-  sensitivity row "book starting progress" scales this remaining work ±25%, rather than the progress share.
-- *The small advance* is paid net (× 0.78) on reaching each milestone.
-
-**Report measures**
-- *Effect boost* = the effects' multiplier on paid-work output (efficiency × throughput), averaged over hours
-  worked. "End" = the last 5 days with paid work.
-- *"Top decile"* = top 10% of runs by end money value, per policy.
-- *"Good combined ending"* (simulator-only, for the greedy-optimal check): not bankrupt, ≤ 1 relationship week
-  missed, ≤ 4 pet-care deficit days, ≤ 6 days with stress > 70.
-- *The feedback target* is scored as "≥ 90% of runs get a payment in each of weeks 1–6".
-
-### Modelling of player strategies (`data/policies.yaml`)
-
-- **Careful:**
-  - 6.5 paid h on weekdays, plus up to 2 h when a deadline is at risk (up to 4 h on weekends, only then).
-  - Book 1.5 h on weekdays, 2.5 h on weekends.
-  - Meets her needs: Mon/Wed/Fri evenings, or Tue/Thu + a Saturday half-day in her crunch weeks. Meets pet care.
-  - Sleeps 8 h, cutting 1 h only when behind.
-  - Accepts offers in $/h order if an earliest-deadline-first (EDF) check at 80% efficiency still fits.
-  - Buys headphones once cash ≥ $1,500.
-- **Book-heavy:** like careful, but 4.5 paid h and 2.5/3.5 h of book; buys headphones at ≥ $1,800.
-- **Grinder:**
-  - 9.5 h on weekdays and 8 h on weekends; sleeps 6–7 h on weekdays and 7 h on weekends.
-  - Covers pet care fully on 60% of days.
-  - Spends one evening a week with her, a second with 50% chance, and a Saturday half-day with 50% chance.
-  - Picks effects by efficiency/rate value.
-  - Results depend on this weekend definition: with 6 h of weekend work and 8 h of sleep, its stress resets
-    every weekend and the stress target fails.
-- **Careless:**
-  - 5.5 h on weekdays only, with no schedule check.
-  - Accepts 70% of offers at random and works on the book on 30% of days.
-  - Cuts sleep randomly on 30% of nights; covers pet care fully on 60% of days.
-  - Picks effects at random.
-- **Greedy-optimal (search-based; reads hidden future state, as allowed):**
-  - For each seed, it simulates 12 plans: weekday hours {8, 10, 12} × weekend {0, 6} × sleep {8, 6}.
-  - In each plan it pre-selects jobs from the full offer stream by net $/h, keeping a job only if it fits the
-    remaining capacity between its offer day and deadline.
-  - It keeps the plan with the highest end value.
-  - Pet care 1 h/day, no time with her, no book.
-  - This is a strong heuristic, not a proven optimum.
-
-### Housekeeping
-
-- **Starting cash in `data/economy.yaml`** is set to the search result (1400). The recommended overlay
-  (`data/economy.recommended.yaml`) is not merged; merging it is the owner's call.
-- **Spec numbers** in `SIM_BASELINE.md` were not edited.
-- **Not swept:** the leisure cap, the bankruptcy floor and the transformation odds aren't in the spec's
-  sensitivity list, but they will matter for balance.
-
+**Tuning and sensitivity**
+- The starting-cash search, H search, CAT check and sensitivity sweep run without greedy-optimal (its 0% targets
+  don't depend on them; it would multiply run time by ~4).
+- The cash score counts the §9.3 rows except book-finish (H sets those), plus careful's low-point target.
+- **Sensitivity rows:**
+  - "Regular-client terms" is split into rate bonus and payment days, because they push in opposite directions.
+  - "Transformation-bill odds" scales the two higher tiers' odds.
+  - The loan window uses 5 / 9 days instead of ±25%.
+- **Implied starting progress** assumes a 215-hour whole book (sim choice, story text only).

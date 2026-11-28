@@ -1,7 +1,7 @@
-# Paws & Paychecks — economy config (v0.2 baseline)
+# Paws & Paychecks — economy config (spec v0.3)
 #
 # Single source of tunable numbers for the economy simulator (sim/) and, later, the game.
-# Values come from design/SIM_BASELINE.md unless marked "(sim choice)", which means the
+# Values come from design/SIM_BASELINE.md (v0.3) unless marked "(sim choice)", which means the
 # spec left the number open and the simulator picked a simple value. Those choices are
 # listed under "Open issues" in sim/reports/SIM_REPORT.md.
 # Money is US dollars. Time is hours or days (day 1 = Monday).
@@ -19,13 +19,13 @@ day:
   default_work_hours: 8       # weekday work hours in the default day (9:00-18:00, 1 h lunch)
   morning_work_hours: 4       # the first N work hours of a day count as "before 13:00"
   evening_after_hours: 8      # work hours beyond this count as "after 19:00"
-  leisure_hours_cap: 4        # (sim choice) max free hours/day that count as leisure for stress relief
+  leisure_hours_cap: 4        # max free hours/day that count as leisure for stress relief (round-1 rule)
   interruption_min: 0.0       # min share of planned work time lost to interruptions per day
   interruption_max: 0.25      # max share of planned work time lost to interruptions per day
   pet_interruption_share: 0.5 # (sim choice) share of interruptions caused by the pet
 
 work:
-  net_factor: 0.78            # share of gross pay kept after setting aside taxes
+  net_factor: 0.78            # share of gross pay kept after taxes (22% tax, FIXED: not a tuning lever)
   throughput:                 # finished words/hour, incl. research and checking
     standard: 310
     post_edit: 470
@@ -34,12 +34,12 @@ work:
     standard_direct: 0.14
     post_edit: 0.055
   rush_rate_multiplier: 1.25  # rush jobs pay base rate x this
-  rush_share: 0.15            # (sim choice) share of non-PE offers that are rush jobs
-  rush_deadline_factor: 0.5   # (sim choice) rush deadline = normal deadline x this (min 1 day)
+  rush_share: 0.15            # share of non-PE random offers that are rush jobs
+  rush_deadline_factor: 0.5   # rush deadline = normal deadline x this (min 1 day)
   pe_rate_all_clients: true   # (sim choice) PE pays the PE rate regardless of client type
 
-offers:
-  per_weekday_mean: 1.3       # Poisson mean of new offers per weekday
+offers:                       # random offers (regular clients are separate, see regular_clients)
+  per_weekday_mean: 0.9       # Poisson mean of random offers per weekday
   expire_days: 1              # offers must be accepted on the day they arrive
   sizes:                      # words range and share of offers
     small:  {min_words: 500,   max_words: 1500,  share: 0.50}
@@ -49,31 +49,74 @@ offers:
   deadline_factor_min: 1.1
   deadline_factor_max: 1.8
   deadline_min_days: 1        # minimum deadline, working days
-  pe_share_start: 0.25        # share of offers that are post-editing before the client switch
+  pe_share_start: 0.25        # share of random offers that are post-editing at the start
   pe_share_end: 0.50          # share reached at pe_share_end_day
-  pe_switch_day_min: 8        # story hook: regular client switches to PE, earliest day (week 2)
-  pe_switch_day_max: 21       # latest day (end of week 3)
-  pe_share_end_day: 36        # (sim choice) day the PE share reaches pe_share_end (start of week 6)
+  pe_switch_day_min: 8        # client A switches to PE on a day drawn uniformly in [min, max]
+  pe_switch_day_max: 21
+  pe_share_end_day: 36        # (sim choice) day the random-offer PE share reaches pe_share_end
+  pe_ramp_from_switch: true   # (sim choice) the random-offer PE share starts rising on A's switch day (as in v0.2)
 
 reputation:
   late_payment_penalty: 0.20  # missed deadline: payment reduced by this share
-  penalty_days: 7             # missed deadline: that client is cool for this many days
-  offer_drop_chance: 0.5      # (sim choice) while cool, chance each offer from that client is lost
-  rate_multiplier: 0.9        # (sim choice) while cool, that client's offers pay x this
+  penalty_days: 7             # missed deadline: that client type is cool for this many days
+  regular_penalty_days: 14    # missed deadline for a regular client: cool for this many days ("counts double")
+  offer_drop_chance: 0.5      # while cool, chance each offer from that client is lost
+  rate_multiplier: 0.9        # while cool, that client's offers pay x this
 
-clients:                      # client type: share of jobs and payment delay after delivery (days)
-  direct:         {share: 0.25, pay_days_min: 2,  pay_days_max: 3}
+clients:                      # random-offer client types: share of random jobs and payment delay after delivery (days)
+  direct:          {share: 0.25, pay_days_min: 2,  pay_days_max: 3}
   standard_agency: {share: 0.50, pay_days_min: 7,  pay_days_max: 7}
-  slow_agency:    {share: 0.25, pay_days_min: 14, pay_days_max: 14}
+  slow_agency:     {share: 0.25, pay_days_min: 14, pay_days_max: 14}
   late_share: 0.20            # share of payments that arrive late
   late_days_min: 3            # late payments arrive this many extra days late (min)
   late_days_max: 7            # (max)
 
-story_job:                    # fixed story event: large agency job taken in week 2, paid in week 5
-  offer_day: 8                # day it is offered (Monday of week 2)
-  words: 12500                # size, words (10,000-15,000 in spec; tune)
-  client: standard_agency
-  pay_day: 33                 # (sim choice) paid on this day (week 5), or 7 days after delivery if later
+regular_clients:              # the three regular clients (spec §3.3). Their jobs are never rush (sim choice).
+  A:                          # the regular agency
+    type: standard_agency
+    pay_days: 5               # pays this many days after delivery (instead of the type's 7)
+    rate_bonus: 0.10          # rate +10% vs. its type
+    prob_per_week: 0.9        # chance of a habit job each week
+    usual_weekday: 1          # usually offered on Monday...
+    weekday_jitter: 1         # ...+-1 day (clamped to weekdays)
+    size_weights: {small: 0.15, medium: 0.70, large: 0.15}   # (sim choice) "mostly medium"
+    switches_to_pe: true      # A's offers become post-editing from the PE switch day
+  B:                          # the direct client
+    type: direct
+    pay_days: null            # null = the type's normal terms
+    rate_bonus: 0.10
+    prob_per_week: 0.8
+    usual_weekday: 4          # Thursday +-1
+    weekday_jitter: 1
+    size_weights: {small: 1.0, medium: 0.0, large: 0.0}
+    switches_to_pe: false
+  C:                          # the slow publisher-side agency
+    type: slow_agency
+    pay_days: 10              # instead of 14
+    rate_bonus: 0.10
+    prob_per_week: 0.45       # "~1 job every 2 weeks"
+    usual_weekday: null       # null = any weekday (uniform)
+    weekday_jitter: 0
+    size_weights: {small: 0.0, medium: 0.70, large: 0.30}    # (sim choice) medium/large in the random-offer ratio
+    switches_to_pe: false
+  rate_bonus_scale: 1.0       # multiplier on all rate_bonus values (sensitivity sweep)
+  pay_days_scale: 1.0         # multiplier on all regular pay_days (sensitivity sweep)
+  prob_scale: 1.0             # multiplier on all prob_per_week values (sensitivity sweep)
+
+day1_job:                     # fixed day-1 job (also the tutorial); always taken
+  client: B
+  offer_day: 1
+  words: 1200
+  deadline_day: 2             # end of day 2
+  pay_days: 2                 # paid this many days after delivery (no late payment)
+
+story_job:                    # fixed week-2 story job from client A
+  client: A
+  offer_day: 8                # Monday of week 2
+  words: 12500                # (tune)
+  pay_day: 33                 # paid on this day, or 7 days after delivery if later
+  always_taken: false         # variant switch: true = forced accept; false = the policy decides
+  decline_offer_drop: 0.5     # declining: client A's offers drop by this share for the rest of the run
 
 pre_move_receivables:         # invoices for pre-move work: day -> net amount ($)
   - {day: 6,  amount: 600}
@@ -94,41 +137,42 @@ costs:
     - {day: 31, amount: 100, label: vet booster}
   transformation_day: 30      # week-5 pet transformation/illness bill
   transformation_tiers: [300, 500, 800]   # possible bills ($)
-  # probability of each tier, by pet-care deficit days before the transformation day (sim choice)
+  # probability of each tier, by weighted pet-care deficit days before the transformation day (round-1 odds)
   transformation_tier_probs:
     - {max_deficit_days: 0,  probs: [0.6, 0.3, 0.1]}
     - {max_deficit_days: 3,  probs: [0.3, 0.4, 0.3]}
     - {max_deficit_days: 999, probs: [0.1, 0.4, 0.5]}
+  transformation_odds_scale: 1.0          # multiplier on the two higher tiers' odds (sensitivity sweep)
   random_cost_chance_per_day: 0.25        # ~1 small cost every 4 days
   random_cost_min: 20
   random_cost_max: 150
-  pet_damage_chance_per_deficit_day: 0.25 # (sim choice) chance of a small damage cost on a pet-care deficit day
+  pet_damage_chance_per_deficit_day: 0.25 # chance of a small damage cost per pet-care deficit day
   illness_cost_min: 0         # cost of a stress illness day ($)
   illness_cost_max: 80
 
 start:
-  cash: 1400                  # cash after day-1 rent ($). Chosen by the starting-cash search, see report §1
+  cash: 1900                  # cash after day-1 rent ($). Starting-cash search result (round 2), see report §1
   stress: 15                  # (sim choice) "low"
-  book_progress_min: 0.60     # share of the book already done at the start
-  book_progress_max: 0.75
 
 book:
   words_per_hour: 150         # literary throughput
-  # remaining work is sized by hours: progress_max -> hours_min, progress_min -> hours_max (linear)
-  remaining_hours_min: 60
-  remaining_hours_max: 80
-  remaining_hours_scale: 1.0  # multiplier on remaining hours (used by the sensitivity sweep)
-  milestones: 3               # equal milestones; finishing all by the last day = book finished
-  advance_enabled: false      # variant: true = small advance paid on each milestone
-  advance_per_milestone: 400  # gross $ per milestone in the "small advance" variant (paid on reaching it)
+  remaining_hours: 67.5       # H: hours of book work left at the start (spec start 70; tuned, see report §1)
+  remaining_hours_variation: 0.05   # remaining work varies +-this share per run (uniform)
+  total_hours_reference: 215  # (sim choice) whole-book size in hours, only to state the implied starting progress
+  milestones: 3               # equal milestones; finishing all by day 42 = book finished
+  near_finished_last_share: 0.5     # near-finished = all but the last milestone + this share of the last one
 
 lifelines:
-  borrow_max: 800             # borrow from her: up to this much, once
-  borrow_buffer: 200          # (sim choice) borrow this much above the shortfall, within the max
+  borrow_max: 800             # borrow from her: up to this much, once (the last lifeline)
+  borrow_buffer: 200          # borrow the shortfall plus this, within the max
   early_payment_fee: 0.10     # ask a client to pay early: lose this share of that invoice, once
   rent_late_fee: 75           # pay rent late once: fee ($)
   rent_late_days: 7           # pay rent late: must be paid within this many days
-  bankrupt_floor: -300        # cash below this at the end of a day = bankrupt, even with lifelines left
+  loan_repay_days: 7          # her loan must be repaid in full within this many days (Normal; 5 on Hard)
+  loan_stress_once: 15        # stress when borrowing
+  loan_stress_per_day: 3      # stress per day while the loan is unpaid
+  repay_reserve_days: 2       # policies repay the loan keeping this many days of costs
+  parents_floor: -300         # cash below this at the end of a day with no lifeline left = parents' ending
 
 stress:
   max: 100
@@ -139,9 +183,10 @@ stress:
   short_night_hours: 7        # a night with less sleep than this is "short"
   consecutive_short_night: 3  # +stress per consecutive short night after the first
   deadline_tomorrow: 5        # +stress per job due tomorrow with work remaining
+  deadline_tomorrow_rush: 8   # ...if it's a rush job
   runway_days: 7              # cash below this many days of costs...
   low_runway: 4               # ...adds this much stress per day
-  rush_in_progress: 2         # +stress per day while any rush job is in progress
+  rush_in_progress: 3         # +stress per day while any rush job is in progress
   leisure_hour: -2            # per leisure / time-with-her hour
   book_hour: -2.5             # per book hour
   no_paid_work_day: -6        # a day with no paid work
@@ -167,34 +212,78 @@ pet:
     - {from_day: 14, hours: 2.0}
     - {from_day: 28, hours: 1.5}
 
+endings:                      # spec §9.1 goal definitions (simulation; tune)
+  pet_max_deficit_days: 4     # pet kept: at most this many (weighted) deficit days
+  rel_max_weeks_missed: 1     # relationship good: at most this many weeks missed...
+  rel_max_missed_in_a_row: 1  # ...never 2 in a row, and any loan repaid on time
+  stress_end_days: [36, 42]   # stress low/medium: average over these days...
+  stress_end_max_avg: 60      # ...at most this
+  high_stress_level: 70       # and at most stress_max_high_days days with stress above this level
+  stress_max_high_days: 6
+  finance_good_min_value: 1500   # finances good: no debt and end money value >= this; "okay" = solvent, below it
+
 effects:
   enabled: true               # false = control runs with no effects
   offer_size: 3               # pick 1 of this many
   weekly_reflection_days: [7, 14, 21, 28, 35]   # guaranteed offers (end of weeks 1-5)
-  work_milestone_every: 4     # an offer every Nth completed paid job
-  size_scale: 1.0             # multiplier on all effect up/downsides (sensitivity sweep)
-  late_offer_from_day: 22     # (sim choice) from this day (weeks 4-5) offers lean away from efficiency...
-  late_offer_efficiency_weight: 0.5   # ...efficiency/throughput effects are drawn with this relative weight
-  caps:                       # within-category caps on summed bonuses
+  work_milestone_every: 8     # an offer every Nth completed paid job (round-1 recommendation, applied)
+  size_scale: 1.0             # multiplier on all effect up/downsides (sensitivity sweep; not prices or time costs)
+  late_offer_from_day: 22     # from this day, efficiency/throughput effects are drawn...
+  late_offer_efficiency_weight: 0.5   # ...with this relative weight
+  caps:                       # within-category caps on summed bonuses (categories multiply)
     efficiency: 0.40
+    throughput: 0.15
     rate: 0.25
-    stress_relief: 0.50
+    stress_relief: 0.50       # cap on the summed multiplier bonus of any one relief source
+    book: 0.20                # cap on summed book-speed bonuses
+  synergies:                  # designed synergies (may exceed caps) when both effects are held
+    quiet_house:    {effects: [deep_focus, headphones], single_project_efficiency: 0.04}
+    first_audience: {effects: [reading_aloud, walk_routine], pet_overlap_hours: 1.0}
+    steady_hands:   {effects: [loyal_client, termbase], regular_pay_days_faster: 2}
+  # The pool (spec §8.4): 30 offered + 6 shop. "category" = cap group / report group.
+  # "time_*" = hours taken from the day (free time first, then paid time). Prices in $.
   pool:
-    deep_focus:      {category: efficiency, single_bonus: 0.15, multi_penalty: 0.10}
-    context_switcher: {category: efficiency, multi_bonus: 0.12, single_penalty: 0.08}
-    morning_person:  {category: efficiency, morning_bonus: 0.15, evening_penalty: 0.10}
-    night_owl:       {category: efficiency, evening_bonus: 0.15, sleep_cut_extra_stress: 1}
-    headphones:      {category: efficiency, shop: true, interruption_reduction: 0.30, price: 120}
-    coworking:       {category: efficiency, shop: true, bonus: 0.10, pet_interruption_reduction: 0.50, price_per_week: 60, extra_pet_care_hours: 0.5}
-    cat_tool:        {category: throughput, bonus: 0.15, price_per_week: 30}
-    direct_network:  {category: rate, direct_offer_multiplier: 2.0, revision_hours: 1}
-    fast_invoicer:   {category: cash_flow, slow_pay_days: 7, fee: 0.03}
-    morning_pages:   {category: stress, daily_relief: 1, book_hour_relief: 3.5, time_hours: 0.5}
-    walk_routine:    {category: pet, pet_hour_relief: 1, skipped_walk_deficit_weight: 2}  # (sim choice) a skipped walk counts as this many deficit days
-    her_spreadsheet: {category: money, requires_evening_with_her: true}
-
-ending:                       # (sim choice) thresholds for a "good combined ending" (report only)
-  max_relationship_weeks_missed: 1
-  max_pet_deficit_days: 4
-  max_high_stress_days: 6     # days with stress > high_stress_level
-  high_stress_level: 70
+    # work style and efficiency
+    deep_focus:       {category: efficiency, book_speed: true, single_bonus: 0.08, multi_penalty: 0.06}
+    context_switcher: {category: efficiency, multi_bonus: 0.07, single_penalty: 0.05}
+    morning_person:   {category: efficiency, morning_bonus: 0.08, evening_penalty: 0.06}
+    night_owl:        {category: efficiency, evening_bonus: 0.10, morning_penalty: 0.05}
+    pomodoro:         {category: efficiency, short_day_bonus: 0.06, short_day_max_hours: 7, evening_penalty: 0.06}
+    sunday_planning:  {category: efficiency, bonus: 0.05, time_sunday: 1}
+    coworking:        {category: efficiency, shop: true, bonus: 0.06, pet_interruption_reduction: 0.50, price_per_week: 60, extra_pet_care_hours: 0.5}
+    headphones:       {category: efficiency, shop: true, interruption_reduction: 0.30, price: 120}
+    # throughput
+    cat_tool:         {category: throughput, bonus: 0.10, price_per_week: 55}   # spec 60; tuned to the pick-rate target
+    second_monitor:   {category: throughput, shop: true, bonus: 0.05, price: 180}
+    termbase:         {category: throughput, bonus: 0.08, first_job_extra_hours: 2}
+    pe_veteran:       {category: throughput, book_speed: true, pe_bonus: 0.15, standard_efficiency_penalty: 0.04, book_penalty: 0.05}
+    # rate and clients
+    direct_network:   {category: rate, direct_offer_multiplier: 2.0, revision_hours: 1}
+    specialist_niche: {category: rate, standard_rate_bonus: 0.15, random_offer_drop: 0.20}
+    rush_specialist:  {category: rate, rush_offer_multiplier: 2.0, rush_rate_multiplier: 1.4, rush_extra_stress: 2}
+    loyal_client:     {category: rate, regular_job_multiplier: 1.5, regular_rate_penalty: 0.10}
+    # cash flow and money
+    fast_invoicer:    {category: cash_flow, slow_pay_days: 7, time_monday: 0.5}
+    invoice_reminders: {category: cash_flow, late_factor: 0.5, regular_penalty_days: 21}
+    deposit_terms:    {category: cash_flow, deposit_share: 0.30, large_offer_drop: 0.25}
+    side_class:       {category: cash_flow, saturday_income: 100, time_saturday: 4}
+    frugal_cooking:   {category: cash_flow, living_saving: 6, time_daily: 0.5}
+    # stress and rest
+    morning_pages:    {category: stress, daily_relief: 1, book_hour_relief: 3.5, time_daily: 0.5}
+    nap_habit:        {category: stress, stress_above: 50, nap_relief: 5, time_nap: 1}
+    boundaries:       {category: stress, leisure_relief_multiplier: 1.2, daily_relief: 1, max_paid_hours: 8}
+    standing_desk:    {category: stress, shop: true, work_hour_over: 1, price: 150}
+    # her
+    shared_calendar:  {category: her, crunch_evenings: [2, 4, 5]}   # (sim choice) adds Friday
+    sunday_brunch:    {category: her, half_day_hours: 3, price_per_use: 25}
+    quiet_company:    {category: her, book_speed: true, overlap_hours: 1, overlap_relief: 1}
+    evening_walks:    {category: her, overlap_hours: 1, extra_pet_care_hours: 0.25}
+    # the creature
+    walk_routine:     {category: pet, pet_hour_relief: 1, skipped_walk_deficit_weight: 2}
+    reading_aloud:    {category: pet, book_speed: true, overlap_hours: 0.5, book_relief_extra: 0.5, overlap_speed_penalty: 0.10}
+    neighbor_sitter:  {category: pet, price_per_use: 25}
+    puppy_class:      {category: pet, shop: true, care_reduction: 0.5, from_day: 14, time_saturday: 2, saturday_weeks: [2, 3, 4], price: 120}
+    sturdy_toys:      {category: pet, shop: true, damage_factor: 0.5, price: 40}
+    # the book
+    margin_notes:     {category: book, book_speed: true, book_bonus: 0.08, book_hour_relief: 2.0}
+    writing_group:    {category: book, book_speed: true, week_book_bonus: 0.10, session_hours: 2, session_relief_multiplier: 2.0}

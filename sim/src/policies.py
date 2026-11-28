@@ -1,11 +1,15 @@
-"""Player strategies (SIM_BASELINE.md §9.2). Numbers come from data/policies.yaml.
+"""Player strategies (SIM_BASELINE.md §10.2). Numbers come from data/policies.yaml.
 
 All policies except GreedyCandidate decide only from what a player can see (see state.py).
 GreedyCandidate is the inner policy of the SEARCH-BASED greedy-optimal strategy: it reads the
 run's full future offer stream. The search itself (trying every candidate per seed) lives in
 experiments.run_greedy_optimal.
+
+v0.3 changes for every policy: the day-1 job is always taken (engine), the story job is a
+decision (`decide_story`), her loan is repaid as soon as cash allows (`loan_repayment`),
+borrowing is always the last lifeline, and effects are rated by effect_value.py.
 """
-from . import effects, offers, stress, time_demands
+from . import costs, effect_value, effects, offers, stress, time_demands
 from . import game_calendar as cal
 from .rng import stream
 from .state import Plan
@@ -16,13 +20,12 @@ LAST_WORK_DAY = 42
 # --- schedule helpers (shared) ---------------------------------------------------------------
 
 def job_hours(cfg, st, job, eff):
-    rate = cfg["work"]["throughput"][job.kind] * effects.throughput_multiplier(cfg, st.held, job.kind) * eff
+    rate = cfg["work"]["throughput"][job.kind] * effects.throughput_multiplier(cfg, st.held, job.offer) * eff
     return job.words_left / rate
 
 
 def offer_as_job(cfg, st, offer):
-    extra = effects.revision_hours(cfg, st.held, offer.client) * cfg["work"]["throughput"][offer.kind]
-    return offers.accept(offer, st.day, st.reputation_until, cfg, extra_words=extra)
+    return offers.accept(cfg, offer, st, effects)
 
 
 def needed_today(cfg, st, jobs, hours_fn, eff):
@@ -39,64 +42,6 @@ def needed_today(cfg, st, jobs, hours_fn, eff):
 
 def planning_efficiency(cfg, st, margin):
     return margin * stress.efficiency(cfg, st.stress)
-
-
-# --- effect valuation ("highest expected value") ---------------------------------------------
-
-def work_hours_left(st, p, cfg):
-    days = range(st.day + 1, cfg["calendar"]["days"] + 1)
-    paid = sum(p.get("weekend_paid_hours", 0) if cal.is_weekend(d) else p.get("weekday_paid_hours", 0) for d in days)
-    book = 0.0 if st.book.finished else sum(
-        p.get("book_weekend_hours", 0) if cal.is_weekend(d) else p.get("book_weekday_hours", 0) for d in days)
-    return paid, book
-
-
-def efficiency_gain(cfg, st, eid, p):
-    """Rough expected efficiency bonus (fraction) of an effect for this player."""
-    t = p.get("weekday_paid_hours", 0) + p.get("book_weekday_hours", 0)
-    morning = min(cfg["day"]["morning_work_hours"], t) / t if t else 0
-    evening = max(0.0, t - cfg["day"]["evening_after_hours"]) / t if t else 0
-    single = st.single_project_days / st.workdays if st.workdays >= 3 else 0.6
-    multi = st.multi_task_days / max(1, st.day - 1) if st.day > 3 else 0.5
-    par = lambda k: effects.param(cfg, eid, k)  # noqa: E731
-    return {
-        "deep_focus": lambda: single * par("single_bonus") - (1 - single) * par("multi_penalty"),
-        "context_switcher": lambda: multi * par("multi_bonus") - (1 - multi) * par("single_penalty"),
-        "morning_person": lambda: morning * par("morning_bonus") - evening * par("evening_penalty"),
-        "night_owl": lambda: evening * par("evening_bonus"),
-    }.get(eid, lambda: 0.0)()
-
-
-def effect_value(cfg, st, eid, p):
-    w = p["value_weights"]
-    days_left = cfg["calendar"]["days"] - st.day
-    weeks_left = days_left / 7
-    paid_h, book_h = work_hours_left(st, p, cfg)
-    hourly = cfg["work"]["throughput"]["standard"] * cfg["work"]["rate"]["standard_agency"] * cfg["work"]["net_factor"]
-    money, stress_pts, book_gain, extra = 0.0, 0.0, 0.0, 0.0
-    gain = efficiency_gain(cfg, st, eid, p)
-    money += gain * paid_h * hourly
-    book_gain += gain * book_h
-    if eid == "cat_tool":
-        money += effects.param(cfg, eid, "bonus") * paid_h * hourly - effects.weekly_price(cfg, eid) * weeks_left
-    elif eid == "direct_network":
-        money += 0.1 * paid_h * hourly - 0.1 * days_left * effects.param(cfg, eid, "revision_hours") * hourly
-    elif eid == "fast_invoicer":
-        money -= effects.param(cfg, eid, "fee") * 0.25 * paid_h * hourly
-        extra += w["liquidity"] * days_left / 42
-    elif eid == "morning_pages":
-        relief_gain = effects.book_relief_per_hour(cfg, [eid]) + cfg["stress"]["book_hour"]
-        stress_pts += effects.param(cfg, eid, "daily_relief") * days_left + relief_gain * book_h
-    elif eid == "walk_routine":
-        pet = time_demands.pet_care_need(cfg, st.day)
-        stress_pts += effects.param(cfg, eid, "pet_hour_relief") * pet * days_left
-    elif eid == "her_spreadsheet":
-        extra += w["info"]
-    value = w["money"] * money + w["stress_per_point"] * stress_pts + w["book_per_hour"] * book_gain + extra
-    only = p.get("category_only")
-    if only and effects.category(cfg, eid) not in only:
-        value = value * 0.05 - 1000   # grinder: efficiency/rate first, others only as a last resort
-    return value
 
 
 # --- base policy -----------------------------------------------------------------------------
@@ -121,24 +66,38 @@ class Policy:
         extra = self.p["weekend_extra_hours"] if cal.is_weekend(day) else self.p["extra_paid_hours"]
         return self.planned_paid(day) + extra
 
+    def capped(self, cfg, st, fn):
+        limit = effects.max_paid_hours(cfg, st.held)
+        return fn if limit is None else (lambda d: min(fn(d), limit))
+
     # offers
-    def choose_offers(self, cfg, st, seen):
+    def fits(self, cfg, st, jobs, hours_fn):
         eff = planning_efficiency(cfg, st, self.p["eff_margin"])
+        return needed_today(cfg, st, jobs, hours_fn, eff) <= hours_fn(st.day) + 1e-9
+
+    def choose_offers(self, cfg, st, seen):
         chosen, jobs = [], list(st.jobs)
-        for offer in sorted(seen, key=lambda o: -o.rate * cfg["work"]["throughput"][o.kind]):
+        planned = self.capped(cfg, st, self.planned_paid)
+        for offer in sorted(seen, key=lambda o: (-o.rate * cfg["work"]["throughput"][o.kind], o.id)):
             trial = jobs + [offer_as_job(cfg, st, offer)]
-            if needed_today(cfg, st, trial, self.planned_paid, eff) <= self.planned_paid(st.day) + 1e-9:
+            if self.fits(cfg, st, trial, planned):
                 chosen.append(offer)
                 jobs = trial
         return chosen
 
+    def decide_story(self, cfg, st, offer):
+        """The story job is hard to refuse: take it if it fits with the extra hours the policy
+        allows itself when behind (planned + extra), not only its planned hours."""
+        return self.fits(cfg, st, st.jobs + [offer_as_job(cfg, st, offer)], self.capped(cfg, st, self.max_paid))
+
     # day plan
     def paid_hours_today(self, cfg, st):
         eff = planning_efficiency(cfg, st, self.p["eff_margin"])
+        planned = self.capped(cfg, st, self.planned_paid)
         total = sum(job_hours(cfg, st, j, eff) for j in st.jobs)
-        need = needed_today(cfg, st, st.jobs, self.planned_paid, eff) if st.jobs else 0.0
-        hours = min(max(self.planned_paid(st.day), need), self.max_paid(st.day))
-        behind = need > self.planned_paid(st.day) + 1e-9
+        need = needed_today(cfg, st, st.jobs, planned, eff) if st.jobs else 0.0
+        hours = min(max(planned(st.day), need), self.capped(cfg, st, self.max_paid)(st.day))
+        behind = need > planned(st.day) + 1e-9
         return min(hours, total), behind
 
     def book_hours_today(self, st, behind):
@@ -149,35 +108,56 @@ class Policy:
     def sleep_today(self, st, behind):
         return self.p["sleep_hours"] - (self.p.get("cut_sleep_when_behind", 0) if behind else 0)
 
+    def pet_need(self, cfg, st, coworking):
+        return time_demands.pet_care_need(cfg, st.day, effects.pet_need_change(cfg, st.held, st.day, coworking))
+
     def pet_today(self, cfg, st, coworking):
-        return time_demands.pet_care_need(cfg, st.day, coworking and "coworking" in st.held,
-                                          effects.param(cfg, "coworking", "extra_pet_care_hours"))
+        return self.pet_need(cfg, st, coworking)
 
     def her_today(self, cfg, st):
-        """'meet': 3 evenings (Mon/Wed/Fri); in her crunch weeks both free evenings + Saturday half-day."""
+        """'meet': 3 evenings (Mon/Wed/Fri); in her crunch weeks every free evening, plus a
+        weekend half-day if the week still needs one."""
         h, day = cfg["her"], st.day
         crunch = cal.week_of(day) in h["crunch_weeks"]
-        if time_demands.her_available_evening(cfg, day) and (crunch or cal.weekday(day) in (1, 3, 5)):
+        evenings = effects.crunch_evenings(cfg, st.held)
+        if time_demands.her_available_evening(cfg, day, evenings) and (crunch or cal.weekday(day) in (1, 3, 5)):
             return h["evening_hours"]
         if cal.weekday(day) == 6 and st.week_evenings < h["evenings_needed"]:
-            return h["half_day_hours"]
+            return effects.half_day_hours(cfg, st.held)
         return 0.0
+
+    def use_sitter(self, cfg, st, plan, behind):
+        """The neighbor covers one day a week: on a day the policy is behind, or would fall short on care."""
+        if "neighbor_sitter" not in st.held or st.sitter_week == cal.week_of(st.day):
+            return False
+        return behind or plan.pet_hours + 1e-9 < self.pet_need(cfg, st, plan.coworking)
+
+    def writing_session(self, cfg, st, plan):
+        """Writing group: one 2 h session a week, on the first weekday evening without her."""
+        if "writing_group" not in st.held or st.book.finished or st.writing_week == cal.week_of(st.day):
+            return False
+        return not cal.is_weekend(st.day) and plan.her_hours == 0 and plan.book_hours > 0
 
     def plan_day(self, cfg, st):
         paid, behind = self.paid_hours_today(cfg, st)
         coworking = "coworking" in st.held and paid > 0 and not cal.is_weekend(st.day)
-        return Plan(paid_hours=paid, book_hours=self.book_hours_today(st, behind),
+        plan = Plan(paid_hours=paid, book_hours=self.book_hours_today(st, behind),
                     pet_hours=self.pet_today(cfg, st, coworking), her_hours=self.her_today(cfg, st),
                     sleep_hours=self.sleep_today(st, behind), coworking=coworking)
+        plan.sitter = self.use_sitter(cfg, st, plan, behind)
+        if self.writing_session(cfg, st, plan):
+            plan.writing_session = True
+            plan.book_hours = max(plan.book_hours, effects.param(cfg, "writing_group", "session_hours"))
+        return plan
 
     # effects and shop
     def pick_effect(self, cfg, st, choices, source):
-        return max(choices, key=lambda eid: (effect_value(cfg, st, eid, self.p), eid))
+        return max(choices, key=lambda eid: (effect_value.value(cfg, st, eid, self.p), eid))
 
     def shop(self, cfg, st):
         buys = []
         for eid, rule in self.p.get("shop", {}).items():
-            if eid not in st.held and st.cash >= rule["min_cash"] and st.day <= 28:
+            if eid not in st.held and st.cash >= rule["min_cash"] and st.day <= rule.get("max_day", 28):
                 buys.append(eid)
         return buys
 
@@ -187,6 +167,14 @@ class Policy:
 
     def pay_deferred_rent(self, cfg, st):
         return st.cash - st.deferred_rent["amount"] >= 300
+
+    def loan_repayment(self, cfg, st):
+        """Repay as soon as cash allows, keeping a reserve of a few days of costs; on the
+        deadline day, pay whatever cash there is."""
+        if st.day >= st.loan["due_day"]:
+            return max(0.0, st.cash)
+        reserve = cfg["lifelines"]["repay_reserve_days"] * costs.daily_running_cost(cfg, st.day, effects.living_saving(cfg, st.held))
+        return max(0.0, st.cash - reserve)
 
 
 class Careful(Policy):
@@ -204,20 +192,20 @@ class Grinder(Policy):
         return self.rng(st, "sleep").choice(self.p["sleep_weekday_choices"])
 
     def pet_today(self, cfg, st, coworking):
-        need = super().pet_today(cfg, st, coworking)
+        need = self.pet_need(cfg, st, coworking)
         if self.rng(st, "pet").random() < self.p["pet_meet_chance"]:
             return need
         return max(0.0, need - self.p["pet_short_hours"])
 
     def her_today(self, cfg, st):
         h, day, rng = cfg["her"], st.day, self.rng(st, "her")
-        if time_demands.her_available_evening(cfg, day):
+        if time_demands.her_available_evening(cfg, day, effects.crunch_evenings(cfg, st.held)):
             if st.week_evenings == 0 and cal.weekday(day) >= 3:
                 return h["evening_hours"]
             if st.week_evenings == 1 and cal.weekday(day) == 5 and rng.random() < self.p["her_second_evening_chance"]:
                 return h["evening_hours"]
         if cal.weekday(day) == 6 and rng.random() < self.p["her_half_day_chance"]:
-            return h["half_day_hours"]
+            return effects.half_day_hours(cfg, st.held)
         return 0.0
 
 
@@ -225,6 +213,9 @@ class Careless(Policy):
     def choose_offers(self, cfg, st, seen):
         rng = self.rng(st, "accept")
         return [o for o in seen if rng.random() < self.p["accept_chance"]]
+
+    def decide_story(self, cfg, st, offer):
+        return self.rng(st, "story").random() < self.p["accept_chance"]
 
     def paid_hours_today(self, cfg, st):
         if cal.is_weekend(st.day) or not st.jobs:
@@ -244,15 +235,15 @@ class Careless(Policy):
         return self.p["sleep_hours"]
 
     def pet_today(self, cfg, st, coworking):
-        need = super().pet_today(cfg, st, coworking)
+        need = self.pet_need(cfg, st, coworking)
         return need if self.rng(st, "pet").random() < self.p["pet_meet_chance"] else need / 2
 
     def her_today(self, cfg, st):
         h, day, rng = cfg["her"], st.day, self.rng(st, "her")
-        if time_demands.her_available_evening(cfg, day) and rng.random() < self.p["her_evening_chance"]:
+        if time_demands.her_available_evening(cfg, day, effects.crunch_evenings(cfg, st.held)) and rng.random() < self.p["her_evening_chance"]:
             return h["evening_hours"]
         if cal.weekday(day) == 6 and rng.random() < self.p["her_half_day_chance"]:
-            return h["half_day_hours"]
+            return effects.half_day_hours(cfg, st.held)
         return 0.0
 
     def pick_effect(self, cfg, st, choices, source):
@@ -266,9 +257,7 @@ class Careless(Policy):
         return []
 
     def lifeline_order(self, cfg, st):
-        order = ["early_payment", "borrow"]
-        self.rng(st, "lifelines").shuffle(order)
-        return order
+        return ["early_payment", "borrow"]   # random in round 1; borrowing is now always last (spec §6)
 
 
 class GreedyCandidate(Policy):
@@ -293,12 +282,12 @@ class GreedyCandidate(Policy):
         days = cfg["calendar"]["days"]
         capacity = {d: self.planned_paid(d) * eff for d in range(1, days + 1)}
         candidates = [o for day_offers in offer_stream["by_day"].values() for o in day_offers
-                      if not o.extra_direct and o.day < cfg["calendar"]["no_new_work_from_day"]]
-        candidates.sort(key=lambda o: (-o.rate * cfg["work"]["throughput"][o.kind], o.id))
+                      if not o.needs and o.day < cfg["calendar"]["no_new_work_from_day"]]
+        candidates.sort(key=lambda o: (o.fixed != "day1", -o.rate * cfg["work"]["throughput"][o.kind], o.id))
         for offer in candidates:
             hours = offer.words / cfg["work"]["throughput"][offer.kind]
             window = range(offer.day, min(offer.deadline_day, days) + 1)
-            if sum(capacity[d] for d in window) + 1e-9 < hours:
+            if sum(capacity[d] for d in window) + 1e-9 < hours and offer.fixed != "day1":
                 continue
             for d in window:
                 use = min(capacity[d], hours)
@@ -308,12 +297,15 @@ class GreedyCandidate(Policy):
 
     def choose_offers(self, cfg, st, seen):
         planned = [o for o in seen if o.id in self.planned_ids]
-        others = [o for o in seen if o.id not in self.planned_ids and o.extra_direct]
+        others = [o for o in seen if o.id not in self.planned_ids and o.needs]
         return planned + super().choose_offers(cfg, st, others)
+
+    def decide_story(self, cfg, st, offer):
+        return offer.id in self.planned_ids
 
     def paid_hours_today(self, cfg, st):
         total = sum(job_hours(cfg, st, j, self.p["eff_margin"]) for j in st.jobs)
-        return min(self.planned_paid(st.day), total), False
+        return min(self.capped(cfg, st, self.planned_paid)(st.day), total), False
 
     def book_hours_today(self, st, behind):
         return 0.0

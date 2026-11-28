@@ -1,0 +1,75 @@
+# Round-1 headline numbers (with effects, book unpaid, 2,000 seeds), extracted once from the round-1 raw
+# results so the round-2 report can compare against them. Source: SIM_REPORT_round1.md.
+chosen_cash: 1400
+policies:
+  careful:
+    bankrupt: 0.009
+    low_day_28_35: 0.582
+    book_finished: 0.634
+    end_value_p50: 2624.5725
+    high_stress_share_w45: 0.0
+    rel_weeks_missed: 0.0
+    pet_deficit_days: 0.0
+    effects_count: 11.0
+    avg_effect_boost: 0.2439
+    end_effect_boost: 0.2702
+    every_week_paid_job: 0.414
+    story_job_taken: 0.4835
+    paid_hours: 180.6616
+  book_heavy:
+    bankrupt: 0.265
+    low_day_28_35: 0.583
+    book_finished: 1.0
+    end_value_p50: 737.1851
+    high_stress_share_w45: 0.0
+    rel_weeks_missed: 0.0
+    pet_deficit_days: 0.0
+    effects_count: 10.8885
+    avg_effect_boost: 0.2122
+    end_effect_boost: 0.2424
+    every_week_paid_job: 0.266
+    story_job_taken: 0.2225
+    paid_hours: 117.4496
+  grinder:
+    bankrupt: 0.0105
+    low_day_28_35: 0.2805
+    book_finished: 0.0
+    end_value_p50: 3289.5901
+    high_stress_share_w45: 0.8039
+    rel_weeks_missed: 5.397
+    pet_deficit_days: 16.8605
+    effects_count: 11.73
+    avg_effect_boost: 0.2706
+    end_effect_boost: 0.3263
+    every_week_paid_job: 0.4965
+    story_job_taken: 0.886
+    paid_hours: 344.6958
+  careless:
+    bankrupt: 0.76
+    low_day_28_35: 0.3985
+    book_finished: 0.0
+    end_value_p50: -104.3144
+    high_stress_share_w45: 0.0
+    rel_weeks_missed: 4.395
+    pet_deficit_days: 16.781
+    effects_count: 9.781
+    avg_effect_boost: 0.1941
+    end_effect_boost: 0.3645
+    every_week_paid_job: 0.203
+    story_job_taken: 0.703
+    paid_hours: 156.9102
+  greedy_optimal:
+    bankrupt: 0.0035
+    low_day_28_35: 0.08
+    book_finished: 0.0
+    end_value_p50: 5690.4647
+    high_stress_share_w45: 0.0514
+    rel_weeks_missed: 6.0
+    pet_deficit_days: 42.0
+    effects_count: 10.998
+    avg_effect_boost: 0.2412
+    end_effect_boost: 0.2901
+    every_week_paid_job: 0.533
+    story_job_taken: 0.2995
+    paid_hours: 331.2487
+

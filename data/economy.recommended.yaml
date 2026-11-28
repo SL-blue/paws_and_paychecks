@@ -1,30 +1,49 @@
-# Recommended tuning changes (overlay on data/economy.yaml), from sim/reports/SIM_REPORT.md §7.
-# NOT yet applied to economy.yaml: pending owner review. `python -m sim.run --all` re-runs the
-# whole matrix with `changes` merged on top of the baseline.
+# Recommended tuning changes, round 2 (overlay on the tuned data/economy.yaml), from sim/reports/SIM_REPORT.md §10.
+# NOT applied to economy.yaml: pending owner review. `python -m sim.run --all` (or --recommended) re-runs the
+# whole matrix with `changes` merged on top of the tuned config.
+# Deliberately NOT here: the finance-good bar (1,500, an owner decision of 2026-11-27) and the ending targets.
+# Changing those is an owner decision; the report (§11) gives the numbers.
 
 changes:
   start:
-    cash: 1450                 # was 1400 (search result)
-  pre_move_receivables:        # first invoice moved from day 6 to day 4; amounts unchanged
-    - {day: 4,  amount: 600}
-    - {day: 13, amount: 900}
-    - {day: 24, amount: 500}
+    cash: 2000                 # was 1900 (search result)
+  lifelines:
+    parents_floor: -100        # was -300
+    borrow_max: 400            # was 800
   effects:
-    work_milestone_every: 8    # was 4
+    work_milestone_every: 12   # was 8
+    pool:
+      side_class: {saturday_income: 60}       # was 100
+      neighbor_sitter: {price_per_use: 0}     # was 25 per use
 
 rationale:
-  - key: effects.work_milestone_every
-    from: 4
-    to: 8
-    why: "Jobs are mostly small (careful finishes ~24 per run), so 'every 4th job' gave ~5.6 work-milestone offers per careful run vs. the ~2-3 the spec expects (§8.1)."
-    expected: "Work-milestone offers ~2.4 per careful run (in the §8.1 range). Effect boost and income fall slightly, so book-heavy needs a little more starting cash (next row)."
-  - key: pre_move_receivables (day 6 -> 4)
-    from: "600 on day 6"
-    to: "600 on day 4"
-    why: "In 30% of careful runs the lowest cash is day 5 (supplies + vet in week 1, before the first invoice), not the convergence week."
-    expected: "Careful's lowest cash moves into days 28-35 more often (target >= 60%); week 1 still gets a payment. No change to total money."
   - key: start.cash
-    from: 1400
-    to: 1450
-    why: "Re-balances book-heavy bankruptcy after the effect change (fewer effects -> less output)."
-    expected: "Book-heavy bankruptcy back to ~30% (edge of the 15-30% band); careful stays <= 2%. Kept below 1500 because the careful policy buys headphones on day 1 at >= 1500, which re-creates the week-1 low (see Open issues)."
+    from: 1900
+    to: 2000
+    why: "The two effect changes below (Saturday class, fewer milestone offers) lower book-heavy's end money, and with it the best ending (55% -> ~40% at 1,900)."
+    expected: "Book-heavy best back to ~50% (target 45-55%); careless parents' ending ~18% instead of ~22%."
+  - key: lifelines.parents_floor
+    from: -300
+    to: -100
+    why: "Once her loan is used, a careless player can sit between -300 and 0 for many days without consequence; careless reaches the parents' ending in only ~6% of runs (target >= 60%)."
+    expected: "Careless parents' ending rises to ~20% at the tuned starting cash (~60-70% at a starting cash of 1,100-1,200). Careful and grinder stay at ~0%."
+  - key: lifelines.borrow_max
+    from: 800
+    to: 400
+    why: "An 800 loan covers almost any shortfall, so the loan rarely leads anywhere. A smaller loan keeps it a real but limited rescue."
+    expected: "Together with the floor: more careless and some book-heavy runs end with the parents; careful unaffected (it almost never borrows)."
+  - key: effects.work_milestone_every
+    from: 8
+    to: 12
+    why: "Careful holds ~10.5 effects at the end (target 7-9); about 2.4 of its ~10 picks come from work milestones."
+    expected: "Careful ~9.6 effects, grinder ~12. Still above 9: the rest needs a design decision (fewer weekly offers or a 'skip' choice)."
+  - key: effects.pool.side_class.saturday_income
+    from: 100
+    to: 60
+    why: "+$100 net for 4 hours (~$25/h) pays better than translation (~$24/h net) with no deadline; careful picks it ~96% of the time when offered and it is the most common effect in careful's top decile (86%, limit 70%)."
+    expected: "Pick rate ~76%; still attractive but no longer near-automatic."
+  - key: effects.pool.neighbor_sitter.price_per_use
+    from: 25
+    to: 0
+    why: "Dead effect (picked ~3% when offered): $25 for one day of care a week is worth little to players who already meet the pet's needs. The spec's alternative cost (2 h of help on Sunday) is not modeled."
+    expected: "Careful picks it ~40% of the time when offered."
