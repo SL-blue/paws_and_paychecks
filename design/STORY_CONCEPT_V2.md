@@ -17,6 +17,7 @@
 - **AI is "the weather"** in the narrative: an ambient condition of the world that shapes the work (e.g. clients asking for post-editing), not an antagonist, a plot driver or an argument.
 - **The partner is an engineer** (field deliberately unspecified), with a habit of trying to quantify things.
 - **Relationship and pet state are never shown as numbers**, only through qualitative indicators (behavior, tone, scenes).
+- **Stress has two layers:** short-term (exhaustion, late nights, deadlines, emotions) and long-term (the situation, relationships, expectations of the future). Too much short-term stress turns into long-term stress (see "Meters and visibility").
 - **Events:** fixed important events, random events drawn by stage, callbacks (including from everyday moments), and choices that change depending on earlier choices (see "Event system").
 - **Daily cycle:** a common-sense default day (work 9 am to 5–6 pm, then rest / entertainment / time together, 8 hours of sleep by default) that the player can rearrange freely; sleep can be cut short at a cost; interruptions happen during the working hours the player sets, and not all of them are bad or important; an **imperfect auto-arrangement** plans the day and the player adjusts it easily (see "Daily cycle").
 - **Roguelike effects:** effects such as working-efficiency modifiers are chosen by the player from **randomly offered** options; chances to pick come from a **mix** of sources (see "Roguelike effects").
@@ -141,24 +142,29 @@ Four entangled lines: **the pet's growth**, **the character's career**, **money*
 2. **A good relationship with her** (not ignoring her too much; any loan from her repaid on time).
 3. **The book finished.**
 4. **Low or medium stress.**
-5. **A good financial situation:** not in the parents' ending, no debt left, and about a month's rent of safety. "Okay" = solvent but below that.
+5. **A good financial situation:** not in the parents' ending, no debt left, and about two weeks of living costs as a cushion. "Okay" = no debt but less cushion. "Poor" = still owing her (or late rent) when the game ends.
 
 ### Tiers
 - **Best:** all five goals.
 - **Good:** goals 1, 2, 4 and 5 without the book (a near-finished book can be "finished a month later").
 - **Mixed / hard:** fewer goals met; which goals are missed shapes the ending's story.
-- **The parents' ending:** borrowing from her raises the character's stress sharply. If the loan isn't repaid within 7 days (Normal; 5 on Hard), the character's parents call and help, and the run ends. It is warm, not a punishment.
+- **The parents' ending:** borrowing from her stings at once and keeps weighing on the character until it's repaid. If the loan comes due during the run (7 days on Normal; 5 on Hard) and isn't repaid, the character's parents call and help, and the run ends. It is warm, not a punishment.
+- **A loan still open when the game ends** (borrowed in the last days) doesn't trigger the parents' ending; the ending acknowledges that the character still owes her.
 
 ### Targets
 - A balanced player should reach the best ending in roughly a quarter to a third of runs, and a good ending or better in most runs.
-- A player who commits to the book reaches the best ending more often, but risks the parents' ending.
+- A player who commits to the book finishes it and reaches the best ending more often, but risks the parents' ending or ending in debt.
 - Exact targets per strategy are in `SIM_BASELINE.md` §9.
 
 ## Meters and visibility
 
 - **Relationship** and **pet** (mood, health, growth): never numbers. Shown through behavior, her messages and tone, scenes, and similar qualitative indicators.
 - **Money:** exact (bankruptcy has to be plannable).
-- **Stress** (and possibly similar personal indicators): may be visible so the player can plan; how visible could depend on the **difficulty setting**. (Open.)
+- **Stress** has two layers, and total stress is their sum:
+  - **Short-term stress:** exhaustion, staying up late, deadlines, temporary emotions (e.g. the sting of asking her for money). It rises and falls quickly; sleep, rest, time with her, the book and most events reduce it.
+  - **Long-term stress:** the character's situation: money and debt, the relationship, the creature's health, the career ("the weather"), and expectations of the future. It changes slowly and falls mainly when its causes are resolved: a payment arriving, rent paid, the loan repaid, a good week with her, and **book milestones** (the book is about the character's future and own voice).
+  - **Conversion:** short-term stress that goes beyond a set level on a day, or stays high for several days, turns into long-term stress. A crunch that goes too far leaves a mark rest alone can't remove.
+  - Stress may be visible so the player can plan; how visible could depend on the **difficulty setting** (idea: Gentle shows both layers, Normal one total level, Hard only body language). (Open.)
 
 ## Event system
 

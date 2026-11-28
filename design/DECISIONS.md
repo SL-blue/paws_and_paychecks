@@ -71,6 +71,18 @@ To change a decision, don't delete the old line. Add a new one and mark the old 
 - 2026-11-27 — The CAT tool becomes weaker and more expensive (about +10% throughput, about $60/week; the simulation may fine-tune the price) — it was a near-automatic pick.
 - 2026-11-27 — "Her spreadsheet" is a story and UI effect only: it helps the player see the character's state, which they might otherwise ignore — it has no mechanical bonus.
 
+### Stress, money and endings — after round 2 (2026-11-27)
+- 2026-11-27 — Stress has two layers: short-term stress (exhaustion, late nights, deadlines, temporary emotions) and long-term stress (the character's situation, relationships and expectations of the future); total stress is their sum — in round 2, rest and effects could erase any amount of overwork, so stress barely mattered.
+- 2026-11-27 — Short-term stress turns into long-term stress when it goes beyond a set level on a day, or stays high for several days — a crunch that goes too far leaves a mark that rest alone can't remove.
+- 2026-11-27 — Events and rest mostly reduce short-term stress; long-term stress falls mainly when its causes are resolved (payments, rent paid, the loan repaid, a good week with her, book milestones) — the situation itself, not quick fixes, should decide how the character feels over weeks.
+- 2026-11-27 — A good financial situation = no debt and about two weeks of living costs left (was about one month's rent); the loan from her is capped lower and the parents' ending triggers earlier below zero — the higher bar tied the book-focused best ending to high starting cash, which removed the parents' ending for everyone.
+- 2026-11-27 — A loan still open on day 42 (not yet due) does not trigger the parents' ending; it gives a "poor" money result, and the ending acknowledges that the character still owes her — a parents' call on the last day would feel strange, and such a run can't reach a good ending anyway.
+- 2026-11-27 — Every effect offer can be skipped for a small fixed benefit; fewer effect offers come from finished jobs — players held too many effects, and since every effect has a downside, skipping is a real choice.
+- 2026-11-27 — Effect-boost targets are restated lower to match the deliberately smaller efficiency effects — the old targets were set before the effects were made smaller.
+- 2026-11-27 — Balanced-player ending targets are tested against an "imperfect careful" player who sometimes slips under pressure — a perfect schedule met every non-book goal by construction, which real players won't.
+- 2026-11-27 — Book-heavy targets: finishes the book in nearly every run, and its good-or-better rate equals its best rate — a player who commits to the book should finish it; its risk is money, not the book.
+- 2026-11-27 — The week-2 story job shrinks (~9,000 words); the payment gap in weeks 2–4 is accepted as the intended squeeze — the job still lands in week 5, but leaves room for small jobs around it.
+
 ## Implementation (agent choices)
 
 <!-- Coding agents may append technical choices here, one line each, with a reason. -->
