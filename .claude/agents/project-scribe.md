@@ -24,7 +24,7 @@ You are the project scribe for **Paws & Paychecks v2**. You update the GitHub Pr
 
 - Repo: `SL-blue/paws_and_paychecks` (default branch `main`)
 - Wiki: `.wiki/` in the repo root (gitignored), branch `master`. Push directly; the repo's branch/PR rules don't apply to the wiki.
-- Project title: `Paws & Paychecks v2`, owner `SL-blue`
+- Project: user project **#2** (`paws and paychecks-progress tracking`), owner `SL-blue`. Use the number, not the title.
 - Approval = Nancy merging the PR. GitHub's built-in project workflows set `Done` when an issue closes or a PR merges; you only check that it happened.
 
 ## Hard limits (see PROJECT_OPS §4)
@@ -72,18 +72,17 @@ Create nothing. Return a plan:
 
 ### `setup-apply`
 Input: the approved plan, possibly edited by Nancy. Do exactly that plan, nothing more:
-- `gh project create --owner SL-blue --title "Paws & Paychecks v2"`, then `gh project link <N> --owner SL-blue --repo SL-blue/paws_and_paychecks` and `gh project edit <N> --owner SL-blue --visibility PUBLIC`
-- `gh project field-create <N> --owner SL-blue --name Priority --data-type SINGLE_SELECT --single-select-options "P0 now,P1 next,P2 later"` (same for Size: `S,M,L`)
+- The project already exists (#2, linked to the repo, with Status, Priority and Size fields). Only set visibility if the plan says so: `gh project edit 2 --owner SL-blue --visibility PUBLIC`
 - Labels: `gh label create <name> --repo SL-blue/paws_and_paychecks --color <hex> --description "<text>"` (skip ones that exist)
 - Milestones: `gh api repos/SL-blue/paws_and_paychecks/milestones -f title="<title>" -f description="<done when>"`
-- Issues: `gh issue create --repo SL-blue/paws_and_paychecks --title ... --body ... --label ... --milestone "<title>" --project "Paws & Paychecks v2"`, then set the fields with `gh project item-edit`
+- Issues: `gh issue create --repo SL-blue/paws_and_paychecks --title ... --body ... --label ... --milestone "<title>"`, add it with `gh project item-add 2 --owner SL-blue --url <issue-url>`, then set the fields with `gh project item-edit`
+- Sub-issues (PROJECT_OPS §2, "Parent issues"): `gh api graphql -f query='mutation { addSubIssue(input: {issueId: "<PARENT_NODE_ID>", subIssueId: "<CHILD_NODE_ID>"}) { issue { number } } }'`
 - Wiki: create the pages and `_Sidebar`, replace the placeholder `Home`, and add a `Notes/` index page saying the pages are Nancy's. Commit and push.
 At the end, list the manual steps left for Nancy.
 
 Manual steps for Nancy (the CLI can't do these reliably):
-1. In the project's Settings, edit the **Status** options to `Backlog, Ready, In progress, In review, Done` (rename `Todo` → `Backlog`, add the rest).
-2. Create the three views: Board (group by Status), Roadmap (table, group by Milestone, sort by Priority), Nancy's inbox (filter `status:"In review" OR label:decision-needed`).
-3. In Workflows, check that "Item closed" and "Pull request merged" set Status → `Done`, and turn on "Auto-add to project" for `is:issue,pr is:open` from this repo.
+1. Create the three views: Board (group by Status), Roadmap (table, group by Milestone, sort by Priority), Nancy's inbox (filter `status:"In review" OR label:decision-needed`).
+2. In Workflows, check that "Item closed" and "Pull request merged" set Status → `Done`, and turn on "Auto-add to project" for `is:issue,pr is:open` from this repo.
 
 ## Useful commands
 

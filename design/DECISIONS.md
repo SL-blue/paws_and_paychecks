@@ -53,6 +53,7 @@ To change a decision, don't delete the old line. Add a new one and mark the old 
 - 2026-11-27 — The book's finishing rate is set by ending targets (careful player: finishes ~40–50%, best ending ~25–35%; book-heavy: best ending ~45–55% with bankruptcy risk) — the best ending should be earned, not the default; committing to the book is rewarded at a risk.
 - 2026-11-27 — The book's starting progress varies only a little between runs, and a nearly finished book ("finished a month later") counts toward the good ending, not the best — finishing should depend on choices, not dice.
 - 2026-11-27 — The book pays no advance during the run — an advance made book-heavy play almost risk-free (27% → 1% bankrupt), and working on the book should stay a real sacrifice.
+- 2026-11-27 — The book is self-initiated (no contract); if it is finished, it gets paid after the game ends, so the payment never affects money during the run — keeps the book a personal project and a real sacrifice, while finishing it still pays off.
 
 ### Work and money (2026-11-27)
 - 2026-11-27 — The week-2 story job is a story choice that is hard to refuse (it comes from the regular client); declining is allowed but hurts that client relationship — keeps the week-5 squeeze likely while leaving the choice to the player.
