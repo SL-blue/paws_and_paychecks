@@ -1,7 +1,7 @@
 """The run state, plus the per-day log the metrics are computed from.
 
 Visibility: policies receive this object but may only read what a player sees: cash, debts,
-stress, held effects, accepted jobs, invoice `expected_day`s, the book, the calendar and
+stress (S, L and T), held effects, accepted jobs, invoice `expected_day`s, the book, the calendar and
 config numbers. Never `Invoice.arrival_day` or the offer stream (only greedy-optimal gets
 that, explicitly, through `Policy.start`).
 """
@@ -9,6 +9,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 
 from .book import Book
+from .stress import Levels
 
 
 @dataclass
@@ -21,16 +22,19 @@ class Plan:
     coworking: bool = False
     sitter: bool = False         # the neighbor covers today's pet care
     writing_session: bool = False   # a writing-group session tonight (2 book hours, not with her)
+    her_slip: bool = False       # imperfect careful skipped a planned evening with her today
+    pet_slip: bool = False       # imperfect careful dropped some pet care today
 
 
 def new_log():
     return {
-        "cash": [], "cash_pre_lifeline": [], "stress": [], "paid_hours": [], "book_hours": [],
+        "cash": [], "cash_pre_lifeline": [], "stress": [], "short": [], "long": [], "paid_hours": [], "book_hours": [],
         "effect_mult": [], "payments": [], "costs": Counter(), "offers_by_source": Counter(),
         "picks": [], "rel_weeks": [], "pet_deficit_days": 0, "illness_days": 0, "crisis_days": [],
         "offers_seen": 0, "offers_accepted": 0, "jobs_delivered": [], "cap_hits": Counter(),
         "shop_buys": [], "pool_exhausted": 0, "regular_jobs": Counter(), "synergy_days": Counter(),
         "her_skipped_weeks": set(), "effect_time_hours": 0.0, "overlap_hours": Counter(),
+        "long_events": Counter(), "skips": [], "slips": Counter(),
     }
 
 
@@ -38,7 +42,7 @@ def new_log():
 class State:
     seed: int
     cash: float
-    stress: float
+    levels: Levels
     book: Book
     day: int = 0
     loan: dict = None                 # her loan: amount, left, day, due_day, (repaid_day)
@@ -46,6 +50,8 @@ class State:
     rent_paid_today: float = 0.0
     high_stress_streak: int = 0
     short_night_streak: int = 0
+    long_events: list = field(default_factory=list)   # today's L events [(label, delta)], cleared nightly
+    stress_today: float = 0.0         # today's T as recorded at the end of the day
     last_sleep_cut: float = 0.0
     jobs: list = field(default_factory=list)          # accepted, not yet delivered
     invoices: list = field(default_factory=list)      # delivered / receivable, not yet paid
@@ -67,6 +73,8 @@ class State:
     pet_deficit_weighted: float = 0.0    # deficit days, weighted (walk routine doubles skipped walks)
     pet_deficit_before_bill: float = 0.0
     sitter_week: int = 0              # last week the neighbor was used
+    sitter_help_due: float = 0.0      # hours of help owed to the neighbor next Sunday
+    week_slip_used: int = 0           # last week imperfect careful accepted a job that didn't fit
     writing_week: int = 0             # last week with a writing-group session
     # observable history used by policies to value effects
     workdays: int = 0
@@ -74,6 +82,14 @@ class State:
     multi_task_days: int = 0
     effect_offer_count: int = 0
     log: dict = field(default_factory=new_log)
+
+    @property
+    def stress(self):
+        """Total stress T right now (the morning value during the day). What efficiency uses."""
+        return self.levels.total
+
+    def add_long(self, label, delta):
+        self.long_events.append((label, delta))
 
     @property
     def parents(self):

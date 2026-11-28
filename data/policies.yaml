@@ -1,12 +1,22 @@
 # Player strategies (policies) for the economy simulator. Simulator-only: the game does not read this file.
-# These numbers model *how players behave* (SIM_BASELINE.md §10.2, kept from round 1); they are not economy rules.
-# v0.3 additions: effect-pick weights for the new pool ("hour" = value of a free hour, "risk" = value of one
-# expected pet-deficit day or missed week avoided; see sim/src/effect_value.py) and shop rules for the new
-# shop items. Shop rule: buy when cash >= min_cash, on or before max_day (default 28).
+# These numbers model *how players behave* (SIM_BASELINE.md §10.2); they are not economy rules.
+# Effect-pick weights: "hour" = value of a free hour, "risk" = value of one expected pet-deficit day or missed
+# week avoided, "stress_per_point" = value of one stress point (S or L) avoided; see sim/src/effect_value.py.
+# v0.4: value-based policies skip an offer when no effect beats the skip reward, and buy a shop item when its
+# value exceeds its price, keeping at least `shop_reserve_days` of costs in cash (sim choice).
 # Hours are per day. "eff_margin" = share of planned hours a policy expects to turn into finished work
 # when it checks whether a new job fits (interruptions, stress).
 
-careful:
+imperfect_careful:
+  # v0.4 (§10.2): careful plus slips under pressure. Everything not listed here is careful's.
+  inherits: careful
+  pressure_stress: 55         # a day "under pressure" starts with total stress T above this...
+  her_skip_chance: 0.30       # ...or with a deadline at risk: skips a planned weekday evening with her
+  pet_drop_chance: 0.20       # ...and drops pet_drop_hours of pet care with this chance
+  pet_drop_hours: 0.5
+  job_slip_chance: 0.15       # per week: accepts one job that doesn't fit its schedule check
+
+careful:                      # "ideal careful" (reference) since v0.4
   weekday_paid_hours: 6.5     # 6-7 h/weekday
   extra_paid_hours: 2         # extra weekday hours allowed when a deadline is at risk
   weekend_paid_hours: 0       # planned weekend work
@@ -21,7 +31,7 @@ careful:
   her: meet                   # 3 evenings, or 2 + weekend half-day in her crunch weeks
   acceptance: fit             # accept offers that fit the schedule, best $/h first
   lifeline_order: [rent_late, early_payment, borrow]
-  shop: {headphones: {min_cash: 1500}}
+  shop_reserve_days: 14       # buy only if cash stays above this many days of costs
   effect_pick: value          # highest expected value (effect_value.py)
   value_weights: {money: 1.0, stress_per_point: 2.0, book_per_hour: 15.0, hour: 5.0, risk: 40.0, liquidity: 60.0}
 
@@ -40,7 +50,7 @@ book_heavy:
   her: meet
   acceptance: fit
   lifeline_order: [rent_late, early_payment, borrow]
-  shop: {headphones: {min_cash: 1800}}
+  shop_reserve_days: 14       # buy only if cash stays above this many days of costs
   effect_pick: value
   value_weights: {money: 0.6, stress_per_point: 4.0, book_per_hour: 40.0, hour: 5.0, risk: 40.0, liquidity: 60.0}
 
@@ -64,8 +74,7 @@ grinder:
   her_half_day_chance: 0.5
   acceptance: fit
   lifeline_order: [early_payment, rent_late, borrow]
-  shop: {headphones: {min_cash: 600}, coworking: {min_cash: 1200}, second_monitor: {min_cash: 900},
-         standing_desk: {min_cash: 1000}, sturdy_toys: {min_cash: 500}}
+  shop_reserve_days: 7
   effect_pick: value
   category_only: [efficiency, throughput, rate]   # efficiency/rate only; others get a tiny weight
   value_weights: {money: 1.0, stress_per_point: 0.3, book_per_hour: 0.0, hour: 2.0, risk: 0.0, liquidity: 0.0}
@@ -92,8 +101,8 @@ careless:
   acceptance: poor            # accepts offers at random, ignoring the schedule
   accept_chance: 0.7
   lifeline_order: [early_payment, borrow]   # random in round 1; borrowing is always last in v0.3
-  shop: {random_chance_per_day: 0.05, min_cash: 300}
-  effect_pick: random
+  shop: {random_chance_per_day: 0.05, min_cash: 300}   # careless buys at random, not by value
+  effect_pick: random        # picks at random among the three; never skips (sim choice)
 
 greedy_optimal:
   # SEARCH-BASED and allowed to read hidden future state (the run's full offer stream).
@@ -105,6 +114,6 @@ greedy_optimal:
   eff_margin: 0.87
   pet_care_hours: 1.0         # "ignores unless forced": only feeding / bare minimum
   lifeline_order: [rent_late, early_payment, borrow]
-  shop: {headphones: {min_cash: 400}, coworking: {min_cash: 900}, second_monitor: {min_cash: 600}}
+  shop_reserve_days: 7
   effect_pick: value
   value_weights: {money: 1.0, stress_per_point: 0.0, book_per_hour: 0.0, hour: 0.0, risk: 0.0, liquidity: 0.0}

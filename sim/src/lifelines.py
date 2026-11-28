@@ -1,13 +1,15 @@
-"""Money crisis, lifelines, her loan and the parents' ending (SIM_BASELINE.md §6, v0.3).
+"""Money crisis, lifelines, her loan and the parents' ending (SIM_BASELINE.md §6, v0.4).
 
 Called at the end of a day when cash < 0 ("crisis"). Lifelines, each usable once:
 1. Pay rent late, if rent fell due today (the rent is owed with a fee within `rent_late_days`).
 2. Ask a client to pay early (lose `early_payment_fee` of the smallest job invoice that covers the gap).
-3. Borrow from her, always last: shortfall + buffer, up to `borrow_max`. Stress +15 at once
-   (+3/day while unpaid is handled by the stress system); due in full within `loan_repay_days`.
+3. Borrow from her, always last: shortfall + buffer, up to `borrow_max`. +S at once (the sting of
+   asking); +L per day while it is open and -L when it is repaid in full are handled by the stress
+   system. Due in full within `loan_repay_days`.
 
-The parents' ending (the run ends that day) happens when the loan is not repaid by its
-deadline, or when cash is below `parents_floor` at the end of a day with no lifeline left.
+The parents' ending (the run ends that day) happens when the loan comes due during the run and
+isn't repaid, or when cash is below `parents_floor` at the end of a day with no lifeline left.
+A loan still open on the last day (not yet due) gives "poor" finances instead (metrics.py).
 """
 
 
@@ -20,6 +22,7 @@ def rent_late(cfg, state, day):
     state.cash += state.rent_paid_today
     state.deferred_rent = {"amount": state.rent_paid_today + lf["rent_late_fee"], "due_day": day + lf["rent_late_days"]}
     state.rent_paid_today = 0
+    state.long_events = [e for e in state.long_events if e[0] != "rent_paid"]   # no relief: rent isn't paid
     state.lifelines_used.append(("rent_late", day))
     return True
 
@@ -47,7 +50,8 @@ def borrow(cfg, state, day):
     amount = min(lf["borrow_max"], -state.cash + lf["borrow_buffer"])
     state.cash += amount
     state.loan = {"amount": amount, "left": amount, "day": day, "due_day": day + round(lf["loan_repay_days"])}
-    state.stress = min(cfg["stress"]["max"], state.stress + lf["loan_stress_once"])
+    lv = state.levels
+    lv.short = min(cfg["stress"]["max"], lv.short + cfg["stress"]["short"]["borrow_once"])
     state.lifelines_used.append(("borrow", day))
     return True
 
@@ -79,7 +83,7 @@ def any_left(state, day):
     return any(available(state, day, n) for n in ACTIONS)
 
 
-def repay_loan(state, amount, day):
+def repay_loan(cfg, state, amount, day):
     pay = min(amount, state.loan["left"])
     if pay <= 0:
         return 0.0
@@ -87,6 +91,7 @@ def repay_loan(state, amount, day):
     state.loan["left"] -= pay
     if state.loan["left"] <= 1e-9:
         state.loan["repaid_day"] = day
+        state.add_long("loan_repaid", cfg["stress"]["long"]["loan_repaid"])
     return pay
 
 

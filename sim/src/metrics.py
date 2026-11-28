@@ -1,5 +1,6 @@
-"""Per-run summary, the five ending goals and the ending tier (SIM_BASELINE.md §9, §10.4), and
-aggregation over many runs. A run that ends in the parents' ending is measured up to that day."""
+"""Per-run summary, the five ending goals, the money tier and the ending tier (SIM_BASELINE.md §9,
+§10.4, v0.4), and aggregation over many runs. A run that ends in the parents' ending is measured up
+to that day. Stress series are the day's values before the night's sleep."""
 from collections import Counter
 
 import numpy as np
@@ -8,14 +9,18 @@ from . import game_calendar as cal
 
 GOALS = ["pet", "relationship", "book", "stress", "finances"]
 TIERS = ["best", "good", "mixed", "hard", "parents"]
+MONEY_TIERS = ["good", "okay", "poor", "parents"]
 
 
-def stress_goal(cfg, series):
+def stress_goal(cfg, series, long_series):
+    """Average T over days 36-42, L on the last day, and days with T above the high level."""
     e = cfg["endings"]
     lo, hi = e["stress_end_days"]
     window = series[lo - 1:hi] or series[-(hi - lo + 1):]   # run ended early: its last week
     high_days = sum(1 for s in series if s > e["high_stress_level"])
-    return float(np.mean(window)) <= e["stress_end_max_avg"] and high_days <= e["stress_max_high_days"], float(np.mean(window)), high_days
+    avg, long_end = float(np.mean(window)), float(long_series[-1])
+    ok = avg <= e["stress_end_max_avg"] and long_end <= e["stress_end_max_long"] and high_days <= e["stress_max_high_days"]
+    return ok, avg, high_days
 
 
 def relationship_goal(cfg, st):
@@ -27,11 +32,12 @@ def relationship_goal(cfg, st):
 
 
 def finance_tier(cfg, st, end_value):
+    """good / okay / poor (debt still open on the last day) / parents (§9.1)."""
     if st.parents:
         return "parents"
-    if st.debt <= 1e-9 and end_value >= cfg["endings"]["finance_good_min_value"]:
-        return "good"
-    return "okay"
+    if st.debt > 1e-9:
+        return "poor"
+    return "good" if end_value >= cfg["endings"]["finance_good_min_value"] else "okay"
 
 
 def ending_tier(goals, parents):
@@ -54,7 +60,7 @@ def summarize(cfg, st, policy):
     pre, stress_series = log["cash_pre_lifeline"], log["stress"]
     receivables = st.receivables()
     end_value = st.cash + 0.9 * receivables - st.debt
-    stress_ok, stress_end_avg, high_days = stress_goal(cfg, stress_series)
+    stress_ok, stress_end_avg, high_days = stress_goal(cfg, stress_series, log["long"])
     rel_ok, rel_missed, rel_streak = relationship_goal(cfg, st)
     fin = finance_tier(cfg, st, end_value)
     near = st.book.near_finished(cfg["book"]["near_finished_last_share"])
@@ -66,6 +72,8 @@ def summarize(cfg, st, policy):
     w45 = [s for d, s in enumerate(stress_series, start=1) if cal.week_of(d) in (4, 5)]
     high = cfg["endings"]["high_stress_level"]
     loan = st.loan or {}
+    w5 = [s for d, s in enumerate(stress_series, start=1) if cal.week_of(d) == 5]
+    picks = log["picks"]
     return {
         "seed": st.seed, "policy": policy.name, "params": getattr(policy, "search_point", None),
         "end_day": st.day,
@@ -77,6 +85,7 @@ def summarize(cfg, st, policy):
         "lifelines": [name for name, _ in st.lifelines_used],
         "loan_taken": bool(st.loan), "loan_amount": float(loan.get("amount", 0.0)),
         "loan_repaid_on_time": bool(st.loan) and loan.get("repaid_day") is not None and loan["repaid_day"] <= loan["due_day"],
+        "loan_day": loan.get("day"), "loan_open_at_end": bool(st.loan) and loan["left"] > 1e-9 and not st.parents,
         "min_cash": float(min(pre)), "min_cash_day": int(np.argmin(pre)) + 1,
         "cash_series": [float(c) for c in pre],
         "end_cash": float(st.cash), "receivables": float(receivables), "debts": float(st.debt),
@@ -85,6 +94,11 @@ def summarize(cfg, st, policy):
         "high_stress_days": high_days, "stress_end_avg": stress_end_avg,
         "high_stress_share_w45": sum(1 for s in w45 if s > high) / len(w45) if w45 else float("nan"),
         "illness_days": log["illness_days"], "mean_stress": float(np.mean(stress_series)),
+        "stress_series": [float(x) for x in stress_series], "short_series": [float(x) for x in log["short"]],
+        "long_series": [float(x) for x in log["long"]],
+        "peak_stress_w5": float(max(w5)) if w5 else float("nan"), "long_end": float(log["long"][-1]),
+        "conversion_days": st.levels.conversions, "converted": float(st.levels.converted),
+        "long_events": dict(log["long_events"]), "slips": dict(log["slips"]),
         "rel_weeks_missed": rel_missed, "rel_worst_streak": rel_streak,
         "pet_deficit_days": log["pet_deficit_days"], "pet_deficit_weighted": float(st.pet_deficit_weighted),
         # book
@@ -94,6 +108,7 @@ def summarize(cfg, st, policy):
         "effects_held": list(st.held), "effects_count": len(st.held),
         "offers_by_source": dict(log["offers_by_source"]), "picks": log["picks"], "shop_buys": log["shop_buys"],
         "pool_exhausted": log["pool_exhausted"], "cap_hits": dict(log["cap_hits"]),
+        "skips": log["skips"], "offers_made": len(picks),
         "synergy_days": dict(log["synergy_days"]),
         "avg_effect_boost": float(np.mean(mults) - 1) if mults else 0.0,
         "end_effect_boost": float(np.mean(mults[-5:]) - 1) if mults else 0.0,
@@ -142,8 +157,12 @@ def aggregate(runs):
         "parents_loan": share(lambda r: r["parents_reason"] == "loan"),
         "parents_floor": share(lambda r: r["parents_reason"] == "floor"),
         "parents_day_median": float(np.median(parents_days)) if parents_days else float("nan"),
+        "money_tiers": {t: share(lambda r, t=t: r["finance_tier"] == t) for t in MONEY_TIERS},
         "finance_good": share(lambda r: r["finance_tier"] == "good"),
         "finance_okay": share(lambda r: r["finance_tier"] == "okay"),
+        "parents_or_poor": share(lambda r: r["finance_tier"] in ("parents", "poor")),
+        "loan_after_35": share(lambda r: r["loan_taken"] and r["loan_day"] > 35),
+        "loan_open_at_end": share(lambda r: r["loan_open_at_end"]),
         "crisis": share(lambda r: r["crisis"]),
         "lifelines_mean": float(np.mean([len(r["lifelines"]) for r in runs])),
         "lifeline_use": {k: share(lambda r, k=k: k in r["lifelines"]) for k in ("rent_late", "early_payment", "borrow")},
@@ -162,6 +181,13 @@ def aggregate(runs):
         "stress_end_avg": mean("stress_end_avg"),
         "high_stress_share_w45": float(np.nanmean([r["high_stress_share_w45"] for r in runs])),
         "illness_days": mean("illness_days"),
+        "mean_stress": mean("mean_stress"),
+        "peak_stress_w5_p50": pct([r["peak_stress_w5"] for r in runs if r["peak_stress_w5"] == r["peak_stress_w5"]], 50),
+        "long_end_p50": pct([r["long_end"] for r in runs], 50),
+        "long_end_40": share(lambda r: r["long_end"] >= 40),
+        "conversion_days": mean("conversion_days"),
+        "stress_goal_missed": share(lambda r: not r["goals"]["stress"]),
+        "skip_rate": (sum(len(r["skips"]) for r in runs) / max(1, sum(r["offers_made"] for r in runs))),
         "rel_weeks_missed": mean("rel_weeks_missed"),
         "pet_deficit_days": mean("pet_deficit_weighted"),
         "book_milestones": mean("book_milestones"),

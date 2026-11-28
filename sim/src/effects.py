@@ -1,4 +1,4 @@
-"""Effects, the roguelike layer (SIM_BASELINE.md §8, v0.3): offers, the pool, caps, synergies,
+"""Effects, the roguelike layer (SIM_BASELINE.md §8, v0.4): offers, the pool, caps, synergies,
 and what held effects do. The engine asks this module small questions ("what is the efficiency
 bonus of this work segment?"); every number comes from `effects.pool` in data/economy.yaml.
 
@@ -18,7 +18,7 @@ LINEAR = {
     "evening_bonus", "evening_penalty", "short_day_bonus", "bonus", "interruption_reduction",
     "pet_interruption_reduction", "pe_bonus", "standard_efficiency_penalty", "book_penalty",
     "standard_rate_bonus", "random_offer_drop", "rush_extra_stress", "regular_rate_penalty",
-    "deposit_share", "large_offer_drop", "saturday_income", "living_saving", "daily_relief", "nap_relief",
+    "deposit_share", "saturday_income", "living_saving", "daily_relief", "daily_long_relief", "nap_relief",
     "pet_hour_relief", "book_relief_extra", "overlap_speed_penalty", "care_reduction", "book_bonus",
     "week_book_bonus", "single_project_efficiency",
 }
@@ -45,7 +45,7 @@ def param(cfg, eid, key):
         base = cfg["work"]["rush_rate_multiplier"]
         return base + (value - base) * scale
     if key == "book_hour_relief":
-        base = -cfg["stress"]["book_hour"]
+        base = -cfg["stress"]["short"]["book_hour"]
         return base + (value - base) * scale
     return value
 
@@ -244,13 +244,13 @@ def reading_aloud_speed(cfg, held):
 # --- stress -----------------------------------------------------------------------------------
 
 def relief_capped(cfg, base, value):
-    """Clamp a relief rate to base x (1 + stress_relief cap)."""
+    """Clamp an S-relief rate to base x (1 + stress_relief cap)."""
     return min(value, base * (1 + cap(cfg, "stress_relief")))
 
 
 def book_relief_per_hour(cfg, held, session=False):
-    """Stress relief per book hour (positive number), with the stress-relief cap."""
-    base = -cfg["stress"]["book_hour"]
+    """S relief per book hour (positive number), with the stress-relief cap."""
+    base = -cfg["stress"]["short"]["book_hour"]
     value = base
     if "morning_pages" in held:
         value += param(cfg, "morning_pages", "book_hour_relief") - base
@@ -270,11 +270,11 @@ def leisure_multiplier(cfg, held):
 
 
 def work_hour_over(cfg, held):
-    return param(cfg, "standing_desk", "work_hour_over") if "standing_desk" in held else cfg["stress"]["work_hour_over"]
+    return param(cfg, "standing_desk", "work_hour_over") if "standing_desk" in held else cfg["stress"]["short"]["work_hour_over"]
 
 
 def daily_relief(cfg, held, pet_hours, napped):
-    """Extra stress relief today from effects (positive = less stress)."""
+    """Extra S relief today from effects (positive = less S)."""
     relief = 0.0
     for eid in ("morning_pages", "boundaries"):
         if eid in held:
@@ -286,19 +286,28 @@ def daily_relief(cfg, held, pet_hours, napped):
     return relief
 
 
+def daily_long_relief(cfg, held):
+    """L relief per day from effects (only morning pages: "processing")."""
+    return param(cfg, "morning_pages", "daily_long_relief") if "morning_pages" in held else 0.0
+
+
 def rush_extra_stress(cfg, held):
     return param(cfg, "rush_specialist", "rush_extra_stress") if "rush_specialist" in held else 0.0
 
 
-def nap_today(cfg, held, stress_level):
-    return "nap_habit" in held and stress_level > param(cfg, "nap_habit", "stress_above")
+def nap_today(cfg, held, short_stress):
+    """A nap on days starting with S above the threshold."""
+    return "nap_habit" in held and short_stress > param(cfg, "nap_habit", "stress_above")
 
 
 # --- time costs, her, pet -----------------------------------------------------------------------
 
-def time_costs(cfg, held, day, napped):
-    """(hours taken from the day by effects, of which hours that count as paid work for stress)."""
+def time_costs(cfg, held, day, napped, neighbor_help=0.0):
+    """(hours taken from the day by effects, of which hours that count as paid work for stress).
+    `neighbor_help` = hours of help owed to the neighbor, given on Sunday."""
     wd, hours, paid_like = cal.weekday(day), 0.0, 0.0
+    if wd == 7:
+        hours += neighbor_help
     for eid in ("frugal_cooking", "morning_pages"):
         if eid in held:
             hours += param(cfg, eid, "time_daily")
@@ -374,9 +383,14 @@ def regular_penalty_days(cfg, held):
 
 
 def deposit_share(cfg, held, offer):
-    if "deposit_terms" in held and offer.size == "large":
+    if "deposit_terms" in held and offer.size in param(cfg, "deposit_terms", "sizes"):
         return param(cfg, "deposit_terms", "deposit_share")
     return 0.0
+
+
+def deposit_extra_days(cfg, deposit):
+    """Days added to a deposit job's remaining payment (deposit terms' downside)."""
+    return param(cfg, "deposit_terms", "remainder_extra_days") if deposit > 0 else 0
 
 
 def living_saving(cfg, held):

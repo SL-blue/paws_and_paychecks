@@ -1,5 +1,6 @@
-"""Unit tests for the economy rules (spec v0.3): payments, regular clients and fixed jobs, costs,
-stress, effects (stacking, caps, synergies), lifelines, the loan and the parents' ending, endings, book."""
+"""Unit tests for the economy rules (spec v0.4): payments, regular clients and fixed jobs, costs,
+two-layer stress and conversion, effects (stacking, caps, synergies, skip, shop), lifelines, the loan and
+the parents' ending, money tiers and endings, book, policies (imperfect careful)."""
 import pytest
 
 from sim.src import book, costs, effects, engine, lifelines, metrics, offers, payments, policies, stress
@@ -117,7 +118,8 @@ def test_fixed_jobs_are_in_the_stream(cfg):
     day1 = next(o for o in s["by_day"][1] if o.fixed == "day1")
     story = next(o for o in s["by_day"][8] if o.fixed == "story")
     assert (day1.regular, day1.words, day1.deadline_day) == ("B", 1200, 2)
-    assert day1.rate == pytest.approx(0.14 * 1.1) and story.regular == "A" and story.words == 12500
+    assert day1.rate == pytest.approx(0.14 * 1.1) and story.regular == "A" and story.words == 9000
+    assert story.size == "medium"                     # 9,000 words: between the medium and large tables
 
 
 def test_regular_client_habits(cfg):
@@ -188,20 +190,80 @@ def test_transformation_tier_depends_on_care_and_odds_scale(cfg):
 
 # --- stress ----------------------------------------------------------------------------------
 
-def test_stress_drivers(cfg):
-    base = cfg["stress"]["natural_recovery"]
-    assert stress.daily_delta(cfg, stress.StressDay(paid_hours=8)) == pytest.approx(4 + base)
-    assert stress.daily_delta(cfg, stress.StressDay(paid_hours=8, work_hour_over=1)) == pytest.approx(2 + base)
-    assert stress.daily_delta(cfg, stress.StressDay(paid_hours=6, sleep_cut=2, short_night_streak=2)) == pytest.approx(8 + 3 + base)
-    assert stress.daily_delta(cfg, stress.StressDay(paid_hours=6, deadlines_tomorrow=1, rush_deadlines_tomorrow=1)) == pytest.approx(13 + base)
-    assert stress.daily_delta(cfg, stress.StressDay(paid_hours=6, rush_in_progress=True, rush_extra=2)) == pytest.approx(5 + base)
-    assert stress.daily_delta(cfg, stress.StressDay(paid_hours=6, loan_open=True)) == pytest.approx(3 + base)
-    assert stress.daily_delta(cfg, stress.StressDay(paid_hours=0)) == pytest.approx(-6 + base)
-    assert stress.daily_delta(cfg, stress.StressDay(paid_hours=6, leisure_hours=2, leisure_multiplier=1.2)) == pytest.approx(-4.8 + base)
+def test_short_term_stress_drivers(cfg):
+    sd = stress.ShortDay
+    assert stress.short_delta(cfg, sd(paid_hours=8)) == pytest.approx(4)
+    assert stress.short_delta(cfg, sd(paid_hours=8, work_hour_over=1)) == pytest.approx(2)
+    assert stress.short_delta(cfg, sd(paid_hours=6, sleep_cut=2, short_night_streak=2)) == pytest.approx(8 + 3)
+    assert stress.short_delta(cfg, sd(paid_hours=6, deadlines_tomorrow=1, rush_deadlines_tomorrow=1)) == pytest.approx(13)
+    assert stress.short_delta(cfg, sd(paid_hours=6, rush_in_progress=True, rush_extra=2)) == pytest.approx(5)
+    assert stress.short_delta(cfg, sd(paid_hours=6, bad_interruption=True)) == pytest.approx(2)
+    assert stress.short_delta(cfg, sd(paid_hours=0)) == pytest.approx(-6)
+    assert stress.short_delta(cfg, sd(paid_hours=6, her_hours=2, book_hours=1)) == pytest.approx(-4 - 2)
+    # leisure: -2/h for the first 2 h, then -1/h; boundaries' multiplier scales it
+    assert stress.short_delta(cfg, sd(paid_hours=6, leisure_hours=3)) == pytest.approx(-5)
+    assert stress.short_delta(cfg, sd(paid_hours=6, leisure_hours=2, leisure_multiplier=1.2)) == pytest.approx(-4.8)
+
+
+def test_long_term_stress_drivers(cfg):
+    lg = cfg["stress"]["long"]
+    ld = stress.LongDay
+    assert stress.long_delta(cfg, ld(runway_days=10)) == lg["runway_low"]
+    assert stress.long_delta(cfg, ld(runway_days=5)) == lg["runway_very_low"]          # instead of, not plus
+    assert stress.long_delta(cfg, ld(rent_due_soon_short=True, loan_open=True, crunch_week=True, pet_deficit=2)) == \
+        pytest.approx(lg["rent_due"] + lg["loan_open"] + lg["her_crunch_day"] + 2 * lg["pet_deficit_day"])
+    # payments relieve L, at most payment_relief_max per day; other events add up
+    events = [("payment", lg["payment_arrives"])] * 5 + [("rent_paid", lg["rent_paid"])]
+    assert stress.long_delta(cfg, ld(events=events)) == pytest.approx(-lg["payment_relief_max"] + lg["rent_paid"])
+    assert stress.long_delta(cfg, ld(extra_relief=0.5)) == -0.5
+
+
+def levels(cfg, short=0.0, long=0.0):
+    return stress.Levels(short=short, long=long, cap=cfg["stress"]["max"])
+
+
+def test_conversion_too_much_and_too_long(cfg):
+    c = cfg["stress"]["conversion"]
+    lv = levels(cfg, short=c["threshold"] + 20, long=10)
+    stress.convert(cfg, lv)
+    assert lv.short == pytest.approx(c["threshold"] + 20 * (1 - c["share"]))
+    assert lv.long == pytest.approx(10 + 20 * c["share"]) and lv.conversions == 1
+    lv = levels(cfg, short=c["sustained_level"] + 1, long=0)
+    for day in range(1, c["sustained_days"] + 2):
+        before = lv.long
+        stress.convert(cfg, lv)
+        gained = lv.long - before
+        assert gained == pytest.approx(c["sustained_per_day"] if day >= c["sustained_days"] else 0.0)
+
+
+def test_day_and_night_order(cfg):
+    """S and L change, conversion, calm-day recovery; the day's T is recorded; sleep lowers S after."""
+    lg, s = cfg["stress"]["long"], cfg["stress"]["short"]
+    lv = levels(cfg, short=10, long=20)
+    t = stress.end_of_day(cfg, lv, stress.ShortDay(paid_hours=8), stress.LongDay())
+    assert lv.short == pytest.approx(14) and lv.long == pytest.approx(20 + lg["calm_day"])
+    assert t == pytest.approx(lv.short + lv.long)
+    stress.sleep_recovery(cfg, lv, 8)
+    assert lv.short == pytest.approx(14 * (1 - s["sleep_recovery_full"]))
+    stress.sleep_recovery(cfg, lv, 6)
+    assert lv.short == pytest.approx(14 * (1 - s["sleep_recovery_full"]) * (1 - s["sleep_recovery_short"]))
+
+
+def test_no_calm_day_recovery_when_short_term_stress_is_high(cfg):
+    lg = cfg["stress"]["long"]
+    lv = levels(cfg, short=lg["calm_day_below"] + 5, long=20)
+    stress.end_of_day(cfg, lv, stress.ShortDay(paid_hours=6), stress.LongDay())
+    assert lv.long == pytest.approx(20)
 
 
 def test_stress_is_clamped_and_reduces_efficiency(cfg):
-    assert stress.apply(cfg, 95, 20) == 100 and stress.apply(cfg, 3, -10) == 0
+    lv = levels(cfg, short=95, long=0)
+    stress.end_of_day(cfg, lv, stress.ShortDay(paid_hours=12, sleep_cut=4), stress.LongDay(runway_days=0))
+    assert lv.short <= 100 and lv.total <= 100
+    lv = levels(cfg, short=3, long=0)
+    stress.end_of_day(cfg, lv, stress.ShortDay(paid_hours=0, leisure_hours=4), stress.LongDay())
+    assert lv.short == 0 and lv.long == 0
+    assert levels(cfg, short=70, long=60).total == 100
     assert stress.efficiency(cfg, 40) == 1.0 and stress.efficiency(cfg, 70) == pytest.approx(0.8)
 
 
@@ -254,10 +316,19 @@ def test_rate_effects_and_cap(cfg):
 
 
 def test_stress_relief_multiplier_cap(cfg):
+    base = -cfg["stress"]["short"]["book_hour"]
+    capped = base * (1 + cfg["effects"]["caps"]["stress_relief"])
     relief, hit = effects.book_relief_per_hour(cfg, ["morning_pages", "reading_aloud"])
-    assert relief == pytest.approx(2.5 * 1.5) and hit     # 2.5 + 1 + 0.5 = 4.0 > cap 3.75
-    assert effects.book_relief_per_hour(cfg, ["margin_notes"])[0] == pytest.approx(2.0)
-    assert effects.book_relief_per_hour(cfg, ["writing_group"], session=True)[0] == pytest.approx(3.75)
+    assert relief == pytest.approx(capped) and hit       # 2 + 1 + 0.5 = 3.5 > cap 2.6
+    assert effects.book_relief_per_hour(cfg, ["reading_aloud"]) == (pytest.approx(2.5), False)
+    assert effects.book_relief_per_hour(cfg, ["margin_notes"])[0] == pytest.approx(1.5)
+    assert effects.book_relief_per_hour(cfg, ["writing_group"], session=True)[0] == pytest.approx(capped)
+
+
+def test_stress_effects_map_to_the_two_layers(cfg):
+    assert effects.daily_long_relief(cfg, ["morning_pages"]) == 0.5 and effects.daily_long_relief(cfg, ["boundaries"]) == 0
+    assert effects.daily_relief(cfg, ["morning_pages", "boundaries"], 0, False) == 2
+    assert effects.nap_today(cfg, ["nap_habit"], 51) and not effects.nap_today(cfg, ["nap_habit"], 50)
 
 
 def test_book_speed_only_from_book_effects_and_capped(cfg):
@@ -339,36 +410,52 @@ def test_early_payment_picks_covering_invoice_at_fee(cfg):
     assert st.cash == pytest.approx(-100 + 180) and [i.id for i in st.invoices] == ["a", "r"]
 
 
-def test_borrowing_is_last_and_raises_stress(cfg):
+def test_borrowing_is_last_and_raises_short_term_stress(cfg):
     st = new_state(cfg, cash=-250)
-    st.stress = 20
+    st.levels.short = 20
     st.invoices = [Invoice("a", 500, 5, 12, 12)]
     lifelines.resolve_crisis(cfg, st, 10, ["borrow", "early_payment"])   # order asks to borrow first
     assert st.loan is None and st.cash == pytest.approx(200)
     st.cash = -100
     lifelines.resolve_crisis(cfg, st, 11, ["borrow", "early_payment"])
-    assert st.loan["amount"] == 300 and st.cash == 200 and st.loan["due_day"] == 18 and st.stress == 35
+    assert st.loan["amount"] == 300 and st.cash == 200 and st.loan["due_day"] == 18
+    assert st.levels.short == 20 + cfg["stress"]["short"]["borrow_once"]
+
+
+def test_loan_is_capped(cfg):
+    st = new_state(cfg, cash=-900)
+    lifelines.borrow(cfg, st, 10)
+    assert st.loan["amount"] == cfg["lifelines"]["borrow_max"] == 400
 
 
 def test_parents_ending_when_loan_is_overdue(cfg):
     st = new_state(cfg, cash=-100)
     lifelines.resolve_crisis(cfg, st, 10, ["borrow"])
     assert lifelines.parents_reason(cfg, st, 16) is None
-    lifelines.repay_loan(st, 100, 16)
+    lifelines.repay_loan(cfg, st, 100, 16)
     assert lifelines.parents_reason(cfg, st, 17) == "loan"
-    lifelines.repay_loan(st, 1000, 17)
+    lifelines.repay_loan(cfg, st, 1000, 17)
     assert lifelines.parents_reason(cfg, st, 17) is None and st.loan["repaid_day"] == 17
+    assert ("loan_repaid", cfg["stress"]["long"]["loan_repaid"]) in st.long_events
 
 
 def test_parents_ending_below_floor_only_without_lifelines(cfg):
     st = new_state(cfg, cash=-400)
     assert lifelines.parents_reason(cfg, st, 10) is None          # borrowing is still possible
     lifelines.resolve_crisis(cfg, st, 10, ["borrow"])
-    assert st.cash == 200
-    st.cash = -250
+    assert st.cash == pytest.approx(-400 + 400)                   # capped at 400
+    st.cash = -99
     assert lifelines.parents_reason(cfg, st, 11) is None          # below 0, above the floor
-    st.cash = -301
+    st.cash = -101
     assert lifelines.parents_reason(cfg, st, 12) == "floor"
+
+
+def test_rent_late_withdraws_the_rent_paid_relief(cfg):
+    st = new_state(cfg, cash=-200)
+    st.rent_paid_today = 1500
+    st.add_long("rent_paid", -5)
+    lifelines.resolve_crisis(cfg, st, 31, ["early_payment", "borrow"])
+    assert not any(label == "rent_paid" for label, _ in st.long_events)
 
 
 def test_parents_ending_stops_the_run(cfg):
@@ -398,14 +485,24 @@ def test_ending_tiers():
     assert metrics.ending_tier(all_met, True) == "parents"
 
 
-def test_finance_and_stress_goals(cfg):
+def test_money_tiers(cfg):
     st = new_state(cfg)
-    assert metrics.finance_tier(cfg, st, 1500) == "good" and metrics.finance_tier(cfg, st, 1499) == "okay"
-    st.loan = {"amount": 100, "left": 50, "day": 40, "due_day": 47}
-    assert metrics.finance_tier(cfg, st, 3000) == "okay"
-    series = [10] * 35 + [60] * 7
-    assert metrics.stress_goal(cfg, series)[0]
-    assert not metrics.stress_goal(cfg, [75] * 7 + [10] * 35)[0]          # 7 days above 70
+    bar = cfg["endings"]["finance_good_min_value"]
+    assert bar == 750
+    assert metrics.finance_tier(cfg, st, bar) == "good" and metrics.finance_tier(cfg, st, bar - 1) == "okay"
+    st.loan = {"amount": 100, "left": 50, "day": 40, "due_day": 47}        # open, not yet due on day 42
+    assert metrics.finance_tier(cfg, st, 3000) == "poor"
+    st.loan, st.deferred_rent = None, {"amount": 1575, "due_day": 45}
+    assert metrics.finance_tier(cfg, st, 3000) == "poor"
+    st.parents_day = 20
+    assert metrics.finance_tier(cfg, st, 3000) == "parents"
+
+
+def test_stress_goal_uses_total_and_long_term_stress(cfg):
+    low_l = [5] * 42
+    assert metrics.stress_goal(cfg, [10] * 35 + [60] * 7, low_l)[0]
+    assert not metrics.stress_goal(cfg, [75] * 7 + [10] * 35, low_l)[0]          # 7 days above 70
+    assert not metrics.stress_goal(cfg, [30] * 42, [5] * 41 + [41])[0]            # L above 40 on day 42
 
 
 # --- book ------------------------------------------------------------------------------------
@@ -452,3 +549,101 @@ def test_day1_job_always_taken_and_story_variant(cfg):
     for seed in range(20):
         r = engine.run(forced, policies.make("book_heavy", pcfg), seed)
         assert r["story_decision"] == "forced" and r["regular_jobs"]["B"] >= 1
+
+
+# --- v0.4: changed effects, skip, shop, imperfect careful ------------------------------------------
+
+def test_deposit_terms_medium_and_large_with_later_remainder(cfg):
+    assert effects.deposit_share(cfg, ["deposit_terms"], make_offer(size="medium")) == pytest.approx(0.30)
+    assert effects.deposit_share(cfg, ["deposit_terms"], make_offer(size="small")) == 0
+    no_late = with_overrides(cfg, {"clients.late_share": 0.0})
+    job = make_job(size="medium", words=4000)
+    inv = payments.make_invoice(no_late, 1, job, 10, job.offer.gross, NO_TERMS, 100, effects.deposit_extra_days(cfg, 100))
+    assert inv.expected_day == 10 + 7 + 3
+    large = make_offer(size="large")
+    large.rolls["large"] = 0.0                                    # no offer penalty any more
+    assert offers.visible(cfg, large, ["deposit_terms"], False, {}, 10, effects)
+
+
+def test_neighbor_costs_two_hours_the_following_sunday(cfg):
+    assert "price_per_use" not in cfg["effects"]["pool"]["neighbor_sitter"]
+    assert effects.time_costs(cfg, ["neighbor_sitter"], 7, False, neighbor_help=2) == (2, 0)
+    assert effects.time_costs(cfg, ["neighbor_sitter"], 6, False, neighbor_help=2) == (0, 0)
+
+
+def test_side_class_and_brunch_changes(cfg):
+    assert effects.saturday_income(cfg, ["side_class"], 6) == 60
+    assert effects.half_day_hours(cfg, ["sunday_brunch"]) == 2
+
+
+def test_skip_when_no_effect_beats_the_skip_reward(cfg, monkeypatch):
+    from sim.src import effect_value
+    pol = policies.make("careful", load_policies())
+    st = new_state(cfg)
+    reward = effect_value.skip_value(cfg, pol.p)
+    assert reward == cfg["effects"]["skip_long_relief"] * pol.p["value_weights"]["stress_per_point"]
+    monkeypatch.setattr(effect_value, "value", lambda cfg, st, eid, p, shop=False: reward - 1)
+    assert pol.pick_effect(cfg, st, ["deep_focus", "cat_tool", "night_owl"], "weekly_reflection") is None
+    monkeypatch.setattr(effect_value, "value", lambda cfg, st, eid, p, shop=False: reward + (eid == "cat_tool"))
+    assert pol.pick_effect(cfg, st, ["deep_focus", "cat_tool", "night_owl"], "weekly_reflection") == "cat_tool"
+
+
+def test_skipping_lowers_long_term_stress(cfg):
+    class Skipper(policies.Careful):
+        def pick_effect(self, cfg, st, choices, source):
+            return None
+    st = new_state(cfg)
+    engine.offer_effect(cfg, st, Skipper("careful", load_policies()["careful"]), "weekly_reflection", 7)
+    assert st.held == [] and st.long_events == [("skip", -cfg["effects"]["skip_long_relief"])]
+
+
+def test_shop_buys_by_value_and_keeps_a_reserve(cfg, monkeypatch):
+    from sim.src import effect_value
+    pol = policies.make("careful", load_policies())
+    st = new_state(cfg, cash=5000)
+    st.day = 5
+    monkeypatch.setattr(effect_value, "value", lambda cfg, st, eid, p, shop=False: 130 if eid == "headphones" else 0)
+    assert pol.shop(cfg, st) == ["headphones"]                       # 130 > price 120
+    st.cash = 120 + 14 * 50 - 1                                       # would dip below 14 days of costs
+    assert pol.shop(cfg, st) == []
+    assert effect_value.price_now(cfg, st, "coworking") == 60 * 6     # weekly price x weeks left (days 5-42)
+
+
+def test_imperfect_careful_inherits_careful(cfg):
+    pcfg = load_policies()
+    p = policies.params("imperfect_careful", pcfg)
+    assert p["weekday_paid_hours"] == pcfg["careful"]["weekday_paid_hours"] and p["her_skip_chance"] == 0.30
+    assert "inherits" not in p
+
+
+def test_imperfect_careful_slips_only_under_pressure(cfg):
+    pcfg = load_policies()
+    pol = policies.make("imperfect_careful", pcfg)
+    calm, pressed = [], []
+    for seed in range(400):
+        st = new_state(cfg)
+        st.seed, st.day = seed, 3                                     # Wednesday: a planned evening with her
+        calm.append(pol.plan_day(cfg, st))
+        st.levels.long = pcfg["imperfect_careful"]["pressure_stress"] + 1
+        pressed.append(pol.plan_day(cfg, st))
+    assert not any(p.her_slip or p.pet_slip for p in calm)
+    her = sum(p.her_slip for p in pressed) / 400
+    pet = sum(p.pet_slip for p in pressed) / 400
+    assert 0.24 < her < 0.36 and 0.15 < pet < 0.25
+    assert all(p.her_hours == 0 for p in pressed if p.her_slip)
+
+
+def test_imperfect_careful_accepts_one_unfit_job_in_a_slip_week(cfg):
+    pcfg = load_policies()
+    pol = policies.make("imperfect_careful", pcfg)
+    huge = make_offer(words=60000, job_id="huge")
+    huge.deadline_day = 3
+    slips = 0
+    for seed in range(300):
+        st = new_state(cfg)
+        st.seed, st.day = seed, 2
+        first = pol.choose_offers(cfg, st, [huge])
+        again = pol.choose_offers(cfg, st, [huge])                    # at most one per week
+        slips += len(first)
+        assert not again
+    assert 0.10 < slips / 300 < 0.20
