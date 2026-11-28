@@ -5,9 +5,11 @@ GreedyCandidate is the inner policy of the SEARCH-BASED greedy-optimal strategy:
 run's full future offer stream. The search itself (trying every candidate per seed) lives in
 experiments.run_greedy_optimal.
 
-v0.3 changes for every policy: the day-1 job is always taken (engine), the story job is a
-decision (`decide_story`), her loan is repaid as soon as cash allows (`loan_repayment`),
-borrowing is always the last lifeline, and effects are rated by effect_value.py.
+For every policy: the day-1 job is always taken (engine), the story job is a decision
+(`decide_story`), her loan is repaid as soon as cash allows (`loan_repayment`), borrowing is
+always the last lifeline. Value-based policies rate effects with effect_value.py, skip an offer
+when no effect beats the skip reward, and buy a shop item when its value exceeds its price (v0.4).
+ImperfectCareful (v0.4) is careful plus slips under pressure.
 """
 from . import costs, effect_value, effects, offers, stress, time_demands
 from . import game_calendar as cal
@@ -141,6 +143,7 @@ class Policy:
     def plan_day(self, cfg, st):
         paid, behind = self.paid_hours_today(cfg, st)
         coworking = "coworking" in st.held and paid > 0 and not cal.is_weekend(st.day)
+        self.behind_today = behind
         plan = Plan(paid_hours=paid, book_hours=self.book_hours_today(st, behind),
                     pet_hours=self.pet_today(cfg, st, coworking), her_hours=self.her_today(cfg, st),
                     sleep_hours=self.sleep_today(st, behind), coworking=coworking)
@@ -152,13 +155,21 @@ class Policy:
 
     # effects and shop
     def pick_effect(self, cfg, st, choices, source):
-        return max(choices, key=lambda eid: (effect_value.value(cfg, st, eid, self.p), eid))
+        """The highest-valued effect, or None (skip) if none beats the skip reward."""
+        best = max(choices, key=lambda eid: (effect_value.value(cfg, st, eid, self.p), eid))
+        return best if effect_value.value(cfg, st, best, self.p) > effect_value.skip_value(cfg, self.p) else None
 
     def shop(self, cfg, st):
-        buys = []
-        for eid, rule in self.p.get("shop", {}).items():
-            if eid not in st.held and st.cash >= rule["min_cash"] and st.day <= rule.get("max_day", 28):
+        """Buy a shop item when its value exceeds its price (§8.5), if cash stays above a reserve."""
+        reserve = self.p["shop_reserve_days"] * costs.daily_running_cost(cfg, st.day, effects.living_saving(cfg, st.held))
+        buys, cash = [], st.cash
+        for eid in effects.shop_items(cfg):
+            if eid in st.held:
+                continue
+            price = effect_value.price_now(cfg, st, eid)
+            if cash - price >= reserve and effect_value.value(cfg, st, eid, self.p, shop=True) > self.p["value_weights"]["money"] * price:
                 buys.append(eid)
+                cash -= effects.one_off_price(cfg, eid) + effects.weekly_price(cfg, eid)
         return buys
 
     # money
@@ -179,6 +190,41 @@ class Policy:
 
 class Careful(Policy):
     pass
+
+
+class ImperfectCareful(Careful):
+    """Careful plus realistic slips under pressure (§10.2):
+    - on a day starting with T above `pressure_stress`, or with a deadline at risk, it skips a
+      planned weekday evening with her with `her_skip_chance`, and drops `pet_drop_hours` of pet
+      care with `pet_drop_chance`;
+    - with `job_slip_chance` per week it accepts one job that doesn't fit its schedule check."""
+
+    def plan_day(self, cfg, st):
+        plan = super().plan_day(cfg, st)
+        if st.stress <= self.p["pressure_stress"] and not self.behind_today:
+            return plan
+        rng = self.rng(st, "slip")
+        her_roll, pet_roll = rng.random(), rng.random()
+        evening = not cal.is_weekend(st.day) and plan.her_hours >= cfg["her"]["evening_hours"] - 1e-9
+        if evening and her_roll < self.p["her_skip_chance"]:
+            plan.her_hours, plan.her_slip = 0.0, True
+        if plan.pet_hours > 0 and not plan.sitter and pet_roll < self.p["pet_drop_chance"]:
+            plan.pet_hours, plan.pet_slip = max(0.0, plan.pet_hours - self.p["pet_drop_hours"]), True
+        return plan
+
+    def slip_week(self, st):
+        week = cal.week_of(st.day)
+        return st.week_slip_used != week and stream(st.seed, "policy", self.name, "job_slip", week).random() < self.p["job_slip_chance"]
+
+    def choose_offers(self, cfg, st, seen):
+        chosen = super().choose_offers(cfg, st, seen)
+        taken = {o.id for o in chosen}
+        rest = [o for o in seen if o.id not in taken]
+        if rest and self.slip_week(st):
+            st.week_slip_used = cal.week_of(st.day)
+            st.log["slips"]["job"] += 1
+            chosen.append(min(rest, key=lambda o: (-o.rate * cfg["work"]["throughput"][o.kind], o.id)))
+        return chosen
 
 
 class BookHeavy(Policy):
@@ -247,6 +293,7 @@ class Careless(Policy):
         return 0.0
 
     def pick_effect(self, cfg, st, choices, source):
+        """Random among the offered effects; careless never skips (sim choice)."""
         return self.rng(st, "effect", source, len(st.held)).choice(choices)
 
     def shop(self, cfg, st):
@@ -320,11 +367,19 @@ class GreedyCandidate(Policy):
         return 0.0
 
 
-POLICY_CLASSES = {"careful": Careful, "book_heavy": BookHeavy, "grinder": Grinder, "careless": Careless}
+POLICY_CLASSES = {"imperfect_careful": ImperfectCareful, "careful": Careful, "book_heavy": BookHeavy,
+                  "grinder": Grinder, "careless": Careless}
+
+
+def params(name, policies_cfg):
+    """A policy's numbers; `inherits: <other>` starts from another policy's numbers."""
+    p = dict(policies_cfg[name])
+    parent = p.pop("inherits", None)
+    return dict(params(parent, policies_cfg), **p) if parent else p
 
 
 def make(name, policies_cfg):
-    return POLICY_CLASSES[name](name, policies_cfg[name])
+    return POLICY_CLASSES[name](name, params(name, policies_cfg))
 
 
 def greedy_candidates(policies_cfg):

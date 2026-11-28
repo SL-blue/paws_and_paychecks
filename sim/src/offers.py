@@ -194,7 +194,9 @@ def fixed_offer(cfg, seed, which):
     else:
         factor = stream(seed, "story_job").uniform(cfg["offers"]["deadline_factor_min"], cfg["offers"]["deadline_factor_max"])
         deadline = deadline_day(cfg, spec["offer_day"], spec["words"] / w["throughput"]["standard"], factor, False)
-    size = "large" if spec["words"] >= cfg["offers"]["sizes"]["large"]["min_words"] else "small"
+    sizes = cfg["offers"]["sizes"]
+    size = "large" if spec["words"] >= sizes["large"]["min_words"] else (
+        "medium" if spec["words"] >= sizes["medium"]["min_words"] else "small")
     return Offer(id=which, day=spec["offer_day"], client=client, kind="standard", rush=False,
                  words=spec["words"], rate=rate, deadline_day=deadline, size=size, regular=regular,
                  fixed=which, rolls=draw_rolls(seed, which))
@@ -223,8 +225,6 @@ def visible(cfg, offer, held, story_declined, reputation_until, day, fx):
         if offer.needs not in held or offer.rolls["extra"] >= fx.extra_offer_share(cfg, offer.needs):
             return False
     if not offer.regular and "specialist_niche" in held and offer.rolls["niche"] < fx.param(cfg, "specialist_niche", "random_offer_drop"):
-        return False
-    if offer.size == "large" and "deposit_terms" in held and offer.rolls["large"] < fx.param(cfg, "deposit_terms", "large_offer_drop"):
         return False
     if offer.regular == "A" and story_declined and offer.rolls["drop"] < cfg["story_job"]["decline_offer_drop"]:
         return False

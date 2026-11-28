@@ -1,17 +1,22 @@
-"""How value-based policies rate an offered effect (SIM_BASELINE.md §8.5).
+"""How value-based policies rate an offered effect or a shop item (SIM_BASELINE.md §8.5).
 
 Method: a short analytic estimate of what the effect would change over the rest of the run for
 *this* player's schedule, in five currencies: money ($), stress points avoided, book hours
 gained, free hours gained, and risk (expected extra pet-deficit days or missed weeks with her).
 The policy's hand-set weights (`value_weights` in data/policies.yaml) turn these into one number,
-and the policy picks the highest. Only player-visible information is used: the calendar, the
-config, the policy's own plan, the jobs it has accepted so far and its current state.
+and the policy picks the highest, or skips when none beats the skip reward (`skip_value`). Shop
+items are valued the same way, without their price, and bought when the value exceeds the price
+(`price_now`, in the policy's money weight). Stress points count S and L alike.
+Only player-visible information is used: the calendar, the config, the policy's own plan, the
+jobs it has accepted so far and its current state.
 """
 from . import effects
 from . import game_calendar as cal
 from . import time_demands
 
 AVG_WORDS = 4325          # mean offer size from the size table (0.5 x 1,000 + 0.35 x 4,500 + 0.15 x 15,000)
+MEAN_INTERRUPTION = 0.125 # mean share of work time lost to interruptions (uniform 0-25%)
+MEAN_DAMAGE = 85          # mean pet-damage cost (uniform 20-150)
 
 
 def context(cfg, st, p):
@@ -47,7 +52,11 @@ def context(cfg, st, p):
         "pet_short": p.get("pet_care") != "meet",
         "max_extra": max(0.0, weekday_paid + p.get("extra_paid_hours", 0) - 8),
         "has_weekend_work": weekend_paid > 0,
-        "high_stress_share": sum(1 for s in st.log["stress"] if s > 50) / max(1, len(st.log["stress"])),
+        "high_stress_share": sum(1 for s in st.log["short"] if s > 50) / max(1, len(st.log["short"])),
+        "weekday_paid": weekday_paid * sum(1 for d in days if not cal.is_weekend(d)),
+        "over6": sum(max(0.0, (weekend_paid if cal.is_weekend(d) else weekday_paid) - 6) for d in days),
+        "days_from_14": sum(1 for d in days if d >= 14),
+        "deficit_share": 1 - p.get("pet_meet_chance", 1.0) if p.get("pet_care") != "meet" else 0.0,
     }
 
 
@@ -105,19 +114,18 @@ def estimate(cfg, st, eid, p, c):
         v["hours"] -= par("time_monday") * c["mondays"]
     elif eid == "invoice_reminders":
         v["money"] += 0.3 * p["value_weights"].get("liquidity", 0) * D / 42
-    elif eid == "deposit_terms":
-        v["money"] += 0.5 * p["value_weights"].get("liquidity", 0) * D / 42
-        v["money"] -= par("large_offer_drop") * 0.35 * P * H * max(c["idle"], 0.3)
+    elif eid == "deposit_terms":   # 30% early on medium/large jobs, the rest 3 days later
+        v["money"] += (0.5 - 0.2) * p["value_weights"].get("liquidity", 0) * D / 42
     elif eid == "side_class":
         v["money"] += par("saturday_income") * c["saturdays"]
         v["hours"] -= par("time_saturday") * c["saturdays"]
-        v["stress"] -= 0 if c["has_weekend_work"] else -cfg["stress"]["no_paid_work_day"] * c["saturdays"]
+        v["stress"] -= 0 if c["has_weekend_work"] else -cfg["stress"]["short"]["no_paid_work_day"] * c["saturdays"]
     elif eid == "frugal_cooking":
         v["money"] += par("living_saving") * D
         v["hours"] -= par("time_daily") * D
     elif eid == "morning_pages":
-        relief = effects.book_relief_per_hour(cfg, [eid])[0] + cfg["stress"]["book_hour"]
-        v["stress"] += par("daily_relief") * D + relief * B
+        relief = effects.book_relief_per_hour(cfg, [eid])[0] + cfg["stress"]["short"]["book_hour"]
+        v["stress"] += (par("daily_relief") + par("daily_long_relief")) * D + relief * B
         v["hours"] -= par("time_daily") * D
     elif eid == "nap_habit":
         days = c["high_stress_share"] * D
@@ -146,25 +154,56 @@ def estimate(cfg, st, eid, p, c):
         v["hours"] += par("overlap_hours") * book_days
         v["stress"] += par("book_relief_extra") * B
         v["book"] -= par("overlap_speed_penalty") * par("overlap_hours") * book_days
-    elif eid == "neighbor_sitter":
-        v["hours"] += 2 * W
-        v["money"] -= effects.per_use_price(cfg, eid) * W
+    elif eid == "neighbor_sitter":   # a day's care once a week, paid back with 2 h on Sunday
+        need = time_demands.base_pet_need(cfg, st.day)
+        v["hours"] += (need - par("help_hours_next_sunday")) * W + 0.5 * W   # + time moved off a busy day
         v["risk"] += W if c["pet_short"] else 0.0
     elif eid == "margin_notes":
         v["book"] += par("book_bonus") * B
-        v["stress"] -= (-cfg["stress"]["book_hour"] - par("book_hour_relief")) * B
+        v["stress"] -= (-cfg["stress"]["short"]["book_hour"] - par("book_hour_relief")) * B
     elif eid == "writing_group":
         v["book"] += par("week_book_bonus") * B
         v["stress"] += 2.5 * W if B > 0 else 0.0
+    # shop items (valued without their price)
+    elif eid == "headphones":
+        saved = par("interruption_reduction") * MEAN_INTERRUPTION
+        v["money"] += saved * P * H
+        v["book"] += saved * B
+    elif eid == "coworking":
+        saved = cfg["day"]["pet_interruption_share"] * par("pet_interruption_reduction") * MEAN_INTERRUPTION
+        v["money"] += (par("bonus") + saved) * c["weekday_paid"] * H
+        v["hours"] -= par("extra_pet_care_hours") * c["weekdays"]
+    elif eid == "second_monitor":
+        v["money"] += marginal_throughput(cfg, st, par("bonus"), 1 - c["pe"]) * P * H
+    elif eid == "standing_desk":
+        v["stress"] += (cfg["stress"]["short"]["work_hour_over"] - par("work_hour_over")) * c["over6"]
+    elif eid == "puppy_class":
+        classes = sum(1 for wk in par("saturday_weeks") if wk * 7 - 1 > st.day)
+        v["hours"] += par("care_reduction") * c["days_from_14"] - par("time_saturday") * classes
+        v["risk"] += c["days_from_14"] / 4 if c["pet_short"] else 0.0
+    elif eid == "sturdy_toys":
+        damage = c["deficit_share"] * D * cfg["costs"]["pet_damage_chance_per_deficit_day"] * MEAN_DAMAGE
+        v["money"] += (1 - par("damage_factor")) * damage
     return v
 
 
-def value(cfg, st, eid, p):
+def skip_value(cfg, p):
+    """What skipping an offer is worth to the policy: the L relief, in its stress weight."""
+    return cfg["effects"]["skip_long_relief"] * p["value_weights"]["stress_per_point"]
+
+
+def price_now(cfg, st, eid):
+    """A shop item's price over the rest of the run: one-off price plus the weekly price per week left."""
+    weeks = -(-(cfg["calendar"]["days"] - st.day + 1) // 7)
+    return effects.one_off_price(cfg, eid) + effects.weekly_price(cfg, eid) * weeks
+
+
+def value(cfg, st, eid, p, shop=False):
     w = p["value_weights"]
     v = estimate(cfg, st, eid, p, context(cfg, st, p))
     total = (w["money"] * v["money"] + w["stress_per_point"] * v["stress"] + w["book_per_hour"] * v["book"]
              + w.get("hour", 0) * v["hours"] + w.get("risk", 0) * v["risk"])
     only = p.get("category_only")
-    if only and effects.category(cfg, eid) not in only:
+    if only and not shop and effects.category(cfg, eid) not in only:
         total = total * 0.05 - 1000   # grinder: efficiency/throughput/rate first, others only as a last resort
     return total

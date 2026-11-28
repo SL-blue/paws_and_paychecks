@@ -6,8 +6,9 @@ from . import engine, policies
 from .config import with_overrides
 from .metrics import aggregate
 
-POLICY_NAMES = ["careful", "book_heavy", "grinder", "careless", "greedy_optimal"]
-PLAYER_POLICIES = POLICY_NAMES[:4]          # the four player strategies (greedy-optimal is a search)
+POLICY_NAMES = ["imperfect_careful", "careful", "book_heavy", "grinder", "careless", "greedy_optimal"]
+PLAYER_POLICIES = POLICY_NAMES[:5]          # the five player strategies (greedy-optimal is a search)
+STRESS_POLICIES = ["imperfect_careful", "careful", "book_heavy", "grinder"]   # the §7.6 stress targets
 VARIANTS = [(True, False), (False, False), (True, True), (False, True)]   # (with effects, story always taken)
 
 
@@ -37,7 +38,8 @@ def _run_chunk(args):
 
 def slim(result):
     """Drop the bulky per-day/per-pick fields for sweeps."""
-    drop = {"cash_series", "picks", "shop_buys", "costs", "overlap_hours"}
+    drop = {"cash_series", "stress_series", "short_series", "long_series", "picks", "shop_buys", "costs",
+            "overlap_hours", "long_events"}
     return {k: v for k, v in result.items() if k not in drop}
 
 

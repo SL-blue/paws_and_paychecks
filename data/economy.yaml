@@ -1,9 +1,9 @@
-# Paws & Paychecks — economy config (spec v0.3)
+# Paws & Paychecks — economy config (spec v0.4)
 #
 # Single source of tunable numbers for the economy simulator (sim/) and, later, the game.
-# Values come from design/SIM_BASELINE.md (v0.3) unless marked "(sim choice)", which means the
-# spec left the number open and the simulator picked a simple value. Those choices are
-# listed under "Open issues" in sim/reports/SIM_REPORT.md.
+# Values come from design/SIM_BASELINE.md (v0.4); "tuned" marks values the round-3 searches moved (spec value given).
+# Values marked "(sim choice)" are numbers the spec left open; the simulator picked a simple value. Those choices
+# are listed under "Open issues" in sim/reports/SIM_REPORT.md.
 # Money is US dollars. Time is hours or days (day 1 = Monday).
 
 calendar:
@@ -19,7 +19,7 @@ day:
   default_work_hours: 8       # weekday work hours in the default day (9:00-18:00, 1 h lunch)
   morning_work_hours: 4       # the first N work hours of a day count as "before 13:00"
   evening_after_hours: 8      # work hours beyond this count as "after 19:00"
-  leisure_hours_cap: 4        # max free hours/day that count as leisure for stress relief (round-1 rule)
+  leisure_hours_cap: 4        # max free hours/day that count as leisure for stress relief
   interruption_min: 0.0       # min share of planned work time lost to interruptions per day
   interruption_max: 0.25      # max share of planned work time lost to interruptions per day
   pet_interruption_share: 0.5 # (sim choice) share of interruptions caused by the pet
@@ -113,7 +113,7 @@ day1_job:                     # fixed day-1 job (also the tutorial); always take
 story_job:                    # fixed week-2 story job from client A
   client: A
   offer_day: 8                # Monday of week 2
-  words: 12500                # (tune)
+  words: 9000                 # (tune; was 12,500 in v0.3)
   pay_day: 33                 # paid on this day, or 7 days after delivery if later
   always_taken: false         # variant switch: true = forced accept; false = the policy decides
   decline_offer_drop: 0.5     # declining: client A's offers drop by this share for the rest of the run
@@ -151,49 +151,83 @@ costs:
   illness_cost_max: 80
 
 start:
-  cash: 1900                  # cash after day-1 rent ($). Starting-cash search result (round 2), see report §1
-  stress: 15                  # (sim choice) "low"
+  cash: 1500                  # cash after day-1 rent ($). Starting-cash search result (round 3), see report §1
+  stress_short: 5             # short-term stress S at the start (the move has just happened)
+  stress_long: 25             # long-term stress L at the start [tuned round 3; spec 10]
 
 book:
   words_per_hour: 150         # literary throughput
-  remaining_hours: 67.5       # H: hours of book work left at the start (spec start 70; tuned, see report §1)
+  remaining_hours: 62.5       # H: hours of book work left at the start (tuned round 3, was 67.5; see report §1)
   remaining_hours_variation: 0.05   # remaining work varies +-this share per run (uniform)
   total_hours_reference: 215  # (sim choice) whole-book size in hours, only to state the implied starting progress
   milestones: 3               # equal milestones; finishing all by day 42 = book finished
   near_finished_last_share: 0.5     # near-finished = all but the last milestone + this share of the last one
 
 lifelines:
-  borrow_max: 800             # borrow from her: up to this much, once (the last lifeline)
+  borrow_max: 400             # borrow from her: up to this much, once (the last lifeline; was 800)
   borrow_buffer: 200          # borrow the shortfall plus this, within the max
   early_payment_fee: 0.10     # ask a client to pay early: lose this share of that invoice, once
   rent_late_fee: 75           # pay rent late once: fee ($)
   rent_late_days: 7           # pay rent late: must be paid within this many days
   loan_repay_days: 7          # her loan must be repaid in full within this many days (Normal; 5 on Hard)
-  loan_stress_once: 15        # stress when borrowing
-  loan_stress_per_day: 3      # stress per day while the loan is unpaid
   repay_reserve_days: 2       # policies repay the loan keeping this many days of costs
-  parents_floor: -300         # cash below this at the end of a day with no lifeline left = parents' ending
+  parents_floor: -100         # cash below this at the end of a day with no lifeline left = parents' ending (was -300)
 
-stress:
-  max: 100
-  per_work_hour_beyond: 6     # paid work hours above this in a day add stress
-  work_hour_over: 2           # +stress per paid hour beyond the threshold
-  sleep_cut_hour: 4           # +stress per hour of sleep cut
+stress:                       # spec §7 (v0.4): two layers. Total T = min(max, S + L)
+  max: 100                    # each layer and the total are clamped to 0..max
+  short:                      # short-term stress S: workload, sleep, deadlines, emotions (Δ S per day)
+    per_work_hour_beyond: 6   # paid work hours above this in a day add S...
+    work_hour_over: 2         # ...this much per hour
+    sleep_cut_hour: 4         # +S per hour of sleep cut below default_sleep_hours
+    short_night_hours: 7      # a night with less sleep than this is "short"
+    consecutive_short_night: 3  # +S extra per consecutive short night after the first
+    deadline_tomorrow: 5      # +S per job due tomorrow with work remaining
+    deadline_tomorrow_rush: 8 # ...if it's a rush job
+    rush_in_progress: 3       # +S per day while any rush job is in progress
+    borrow_once: 10           # +S once when borrowing from her (the sting of asking)
+    bad_interruption: 2       # +S for a bad interruption
+    bad_interruption_chance: 0.25  # (sim choice) chance per workday that one of the day's interruptions is bad
+    sleep_recovery_full: 0.4 # each night: S falls by this share with a full night (>= default_sleep_hours)... [tuned round 3; spec 0.30]
+    sleep_recovery_short: 0.1  # ...and by this share with less sleep (tune) [tuned round 3; spec 0.15]
+    leisure_first_hours: 2    # the first N leisure hours of a day relieve...
+    leisure_first_hour: -2    # ...this much per hour...
+    leisure_later_hour: -1    # ...later leisure hours this much (up to day.leisure_hours_cap)
+    her_hour: -2              # per hour with her
+    book_hour: -2             # per book hour (was -2.5)
+    no_paid_work_day: -6      # a day with no paid work
+  long:                       # long-term stress L: the situation (Δ L)
+    runway_low_days: 14       # cash below this many days of costs...
+    runway_low: 2             # ...+L per day [tuned round 3; spec 1]
+    runway_very_low_days: 7   # cash below this many days of costs...
+    runway_very_low: 3        # ...+L per day (instead of runway_low) [tuned round 3; spec 2]
+    rent_window_days: 5       # rent due within this many days and cash below the rent...
+    rent_due: 6               # ...+L per day [tuned round 3; spec 2]
+    loan_open: 2              # +L per day while her loan is open
+    her_week_missed: 6        # +L once for a week with her needs not met
+    her_crunch_day: 4         # +L per day in her crunch weeks [tuned round 3; spec 1]
+    pet_deficit_day: 1        # +L per pet-care deficit day
+    pet_event_start: 8        # +L when the week-5 illness/transformation starts...
+    pet_bill_paid: -4         # ...and this when its bill is paid
+    pe_switch: 5              # +L once when client A switches to post-editing ("the weather")
+    payment_late: 3           # +L once when a payment doesn't arrive on its expected day
+    payment_arrives: -0.5     # per payment that arrives... [tuned round 3; spec -2]
+    payment_relief_max: 4     # ...at most this much relief per day
+    rent_paid: -5             # rent paid
+    loan_repaid: -10          # her loan repaid in full
+    her_good_week: -3         # at the end of a week with her needs met
+    book_milestone: -10       # per book milestone [tuned round 3; spec -8]
+    calm_day: -1              # on a day ending with S below calm_day_below...
+    calm_day_below: 40
+  conversion:                 # spec §7.4: S turning into L (tune)
+    threshold: 40             # at the end of a day, if S > this... [tuned round 3; spec 60]
+    share: 0.5               # ...this share of the excess moves from S to L [tuned round 3; spec 0.25]
+    sustained_level: 45       # if S > this...
+    sustained_days: 3         # ...for this many days in a row, from the last of them...
+    sustained_per_day: 2      # ...L gains this much per day
   sleep_cut_efficiency: 0.05  # next-day efficiency lost per hour of sleep cut
-  short_night_hours: 7        # a night with less sleep than this is "short"
-  consecutive_short_night: 3  # +stress per consecutive short night after the first
-  deadline_tomorrow: 5        # +stress per job due tomorrow with work remaining
-  deadline_tomorrow_rush: 8   # ...if it's a rush job
-  runway_days: 7              # cash below this many days of costs...
-  low_runway: 4               # ...adds this much stress per day
-  rush_in_progress: 3         # +stress per day while any rush job is in progress
-  leisure_hour: -2            # per leisure / time-with-her hour
-  book_hour: -2.5             # per book hour
-  no_paid_work_day: -6        # a day with no paid work
-  natural_recovery: -3        # every day
-  efficiency_threshold: 50    # above this, efficiency drops...
+  efficiency_threshold: 50    # above this total stress T, efficiency drops...
   efficiency_per_point: 0.01  # ...by this much per point
-  illness_threshold: 85       # stress above this...
+  illness_threshold: 85       # T above this...
   illness_after_days: 2       # ...for this many consecutive days...
   illness_chance: 0.15        # ...gives this daily chance of losing a day to illness
 
@@ -216,17 +250,20 @@ endings:                      # spec §9.1 goal definitions (simulation; tune)
   pet_max_deficit_days: 4     # pet kept: at most this many (weighted) deficit days
   rel_max_weeks_missed: 1     # relationship good: at most this many weeks missed...
   rel_max_missed_in_a_row: 1  # ...never 2 in a row, and any loan repaid on time
-  stress_end_days: [36, 42]   # stress low/medium: average over these days...
-  stress_end_max_avg: 60      # ...at most this
-  high_stress_level: 70       # and at most stress_max_high_days days with stress above this level
+  stress_end_days: [36, 42]   # stress low/medium: average total stress T over these days...
+  stress_end_max_avg: 60      # ...at most this,
+  stress_end_max_long: 40     # and long-term stress L on the last day at most this,
+  high_stress_level: 70       # and at most stress_max_high_days days with T above this level
   stress_max_high_days: 6
-  finance_good_min_value: 1500   # finances good: no debt and end money value >= this; "okay" = solvent, below it
+  finance_good_min_value: 750    # finances good: no debt on day 42 and end money value >= this (about two weeks of
+                                 # living costs; was 1,500). "Okay" = no debt, below it. "Poor" = debt still open
 
 effects:
   enabled: true               # false = control runs with no effects
   offer_size: 3               # pick 1 of this many
   weekly_reflection_days: [7, 14, 21, 28, 35]   # guaranteed offers (end of weeks 1-5)
-  work_milestone_every: 8     # an offer every Nth completed paid job (round-1 recommendation, applied)
+  work_milestone_every: 12    # an offer every Nth completed paid job (was 8)
+  skip_long_relief: 3         # skipping an offer ("keeping life simple") lowers L by this much (tune)
   size_scale: 1.0             # multiplier on all effect up/downsides (sensitivity sweep; not prices or time costs)
   late_offer_from_day: 22     # from this day, efficiency/throughput effects are drawn...
   late_offer_efficiency_weight: 0.5   # ...with this relative weight
@@ -234,7 +271,7 @@ effects:
     efficiency: 0.40
     throughput: 0.15
     rate: 0.25
-    stress_relief: 0.50       # cap on the summed multiplier bonus of any one relief source
+    stress_relief: 0.30       # cap on the summed multiplier bonus of any one S-relief source (was 0.50)
     book: 0.20                # cap on summed book-speed bonuses
   synergies:                  # designed synergies (may exceed caps) when both effects are held
     quiet_house:    {effects: [deep_focus, headphones], single_project_efficiency: 0.04}
@@ -265,25 +302,25 @@ effects:
     # cash flow and money
     fast_invoicer:    {category: cash_flow, slow_pay_days: 7, time_monday: 0.5}
     invoice_reminders: {category: cash_flow, late_factor: 0.5, regular_penalty_days: 21}
-    deposit_terms:    {category: cash_flow, deposit_share: 0.30, large_offer_drop: 0.25}
-    side_class:       {category: cash_flow, saturday_income: 100, time_saturday: 4}
+    deposit_terms:    {category: cash_flow, deposit_share: 0.30, sizes: [medium, large], remainder_extra_days: 3}
+    side_class:       {category: cash_flow, saturday_income: 60, time_saturday: 4}   # was 100
     frugal_cooking:   {category: cash_flow, living_saving: 6, time_daily: 0.5}
     # stress and rest
-    morning_pages:    {category: stress, daily_relief: 1, book_hour_relief: 3.5, time_daily: 0.5}
+    morning_pages:    {category: stress, daily_relief: 1, daily_long_relief: 0.5, book_hour_relief: 3, time_daily: 0.5}
     nap_habit:        {category: stress, stress_above: 50, nap_relief: 5, time_nap: 1}
     boundaries:       {category: stress, leisure_relief_multiplier: 1.2, daily_relief: 1, max_paid_hours: 8}
     standing_desk:    {category: stress, shop: true, work_hour_over: 1, price: 150}
     # her
     shared_calendar:  {category: her, crunch_evenings: [2, 4, 5]}   # (sim choice) adds Friday
-    sunday_brunch:    {category: her, half_day_hours: 3, price_per_use: 25}
+    sunday_brunch:    {category: her, half_day_hours: 2, price_per_use: 25}   # was 3 h
     quiet_company:    {category: her, book_speed: true, overlap_hours: 1, overlap_relief: 1}
     evening_walks:    {category: her, overlap_hours: 1, extra_pet_care_hours: 0.25}
     # the creature
     walk_routine:     {category: pet, pet_hour_relief: 1, skipped_walk_deficit_weight: 2}
     reading_aloud:    {category: pet, book_speed: true, overlap_hours: 0.5, book_relief_extra: 0.5, overlap_speed_penalty: 0.10}
-    neighbor_sitter:  {category: pet, price_per_use: 25}
+    neighbor_sitter:  {category: pet, help_hours_next_sunday: 2}   # no money cost; 2 h of help the following Sunday per use
     puppy_class:      {category: pet, shop: true, care_reduction: 0.5, from_day: 14, time_saturday: 2, saturday_weeks: [2, 3, 4], price: 120}
     sturdy_toys:      {category: pet, shop: true, damage_factor: 0.5, price: 40}
     # the book
-    margin_notes:     {category: book, book_speed: true, book_bonus: 0.08, book_hour_relief: 2.0}
+    margin_notes:     {category: book, book_speed: true, book_bonus: 0.08, book_hour_relief: 1.5}
     writing_group:    {category: book, book_speed: true, week_book_bonus: 0.10, session_hours: 2, session_relief_multiplier: 2.0}

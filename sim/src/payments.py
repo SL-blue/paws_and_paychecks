@@ -1,5 +1,5 @@
 """Payments (SIM_BASELINE.md §3.3, §3.5-3.6): invoices on delivery, compressed payment terms,
-regular-client terms, late payments, deposits.
+regular-client terms, late payments, deposits (the rest of a deposit job is paid later).
 
 An invoice has a public `expected_day` (what the "money owed" list shows) and a hidden
 `arrival_day` (when the cash really lands). Policies may only read `expected_day`.
@@ -35,9 +35,10 @@ def base_delay(cfg, rng, offer, terms):
     return delay
 
 
-def make_invoice(cfg, seed, job, day, gross, terms, already_paid=0.0):
+def make_invoice(cfg, seed, job, day, gross, terms, already_paid=0.0, extra_days=0):
     """Invoice for a job delivered on `day`. `terms` = effects.pay_terms(); `already_paid` = a
-    deposit received at acceptance (net $), deducted from this invoice."""
+    deposit received at acceptance (net $), deducted from this invoice; `extra_days` = days added to
+    the normal terms (deposit terms pay the remainder later)."""
     clients, offer = cfg["clients"], job.offer
     rng = stream(seed, "payment", job.id)
     delay = base_delay(cfg, rng, offer, terms)
@@ -46,7 +47,7 @@ def make_invoice(cfg, seed, job, day, gross, terms, already_paid=0.0):
     if job.late:
         net *= 1 - cfg["reputation"]["late_payment_penalty"]
     net = max(0.0, net - already_paid)
-    expected = day + delay
+    expected = day + delay + extra_days
     if offer.fixed == "story":
         expected = max(cfg["story_job"]["pay_day"], day + 7)
         late_roll = 1.0  # the story delay *is* the lateness
