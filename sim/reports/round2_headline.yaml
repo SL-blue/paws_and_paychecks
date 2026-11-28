@@ -1,0 +1,117 @@
+# Round-2 headline numbers (spec v0.3; tuned config, with effects, story job declinable, 2,000 seeds),
+# extracted once from the round-2 raw results so the round-3 report can compare against them.
+# Source: SIM_REPORT_round2.md. Round 2 had one stress layer; mean_stress is that single level.
+chosen_cash: 1900
+h: 67.5
+cat_price: 55
+policies:
+  careful:
+    parents: 0.0
+    good_or_better: 1.0
+    book_finished: 0.4885
+    end_value_p50: 3287.6873
+    low_day_28_35: 0.6665
+    effects_count: 10.494
+    avg_effect_boost: 0.0765
+    end_effect_boost: 0.1173
+    every_week_paid_job: 0.7265
+    story_job_taken: 0.885
+    paid_hours: 188.6747
+    finance_good: 1.0
+    high_stress_days: 0.0
+    stress_end_avg: 0.003
+    rel_weeks_missed: 0.0
+    pet_deficit_days: 0.0
+    crisis: 0.05
+    loan_taken: 0.0
+    best: 0.4885
+    mean_stress: 0.1444
+    stress_goal: 1.0
+  book_heavy:
+    parents: 0.0005
+    good_or_better: 0.548
+    book_finished: 1.0
+    end_value_p50: 1561.6435
+    low_day_28_35: 0.943
+    effects_count: 10.408
+    avg_effect_boost: 0.0436
+    end_effect_boost: 0.0575
+    every_week_paid_job: 0.4795
+    story_job_taken: 0.8915
+    paid_hours: 125.585
+    finance_good: 0.548
+    high_stress_days: 0.0
+    stress_end_avg: 0.0502
+    rel_weeks_missed: 0.0
+    pet_deficit_days: 0.0
+    crisis: 0.4565
+    loan_taken: 0.0215
+    best: 0.548
+    mean_stress: 0.0445
+    stress_goal: 1.0
+  grinder:
+    parents: 0.0
+    good_or_better: 0.0
+    book_finished: 0.0
+    end_value_p50: 6061.7059
+    low_day_28_35: 0.0765
+    effects_count: 13.158
+    avg_effect_boost: 0.1665
+    end_effect_boost: 0.216
+    every_week_paid_job: 0.9415
+    story_job_taken: 0.965
+    paid_hours: 357.2136
+    finance_good: 1.0
+    high_stress_days: 2.8105
+    stress_end_avg: 29.3191
+    rel_weeks_missed: 5.1555
+    pet_deficit_days: 18.87
+    crisis: 0.009
+    loan_taken: 0.0
+    best: 0.0
+    mean_stress: 27.6914
+    stress_goal: 0.819
+  careless:
+    parents: 0.061
+    good_or_better: 0.0
+    book_finished: 0.0
+    end_value_p50: 483.1931
+    low_day_28_35: 0.378
+    effects_count: 8.2465
+    avg_effect_boost: 0.0505
+    end_effect_boost: 0.0927
+    every_week_paid_job: 0.6125
+    story_job_taken: 0.692
+    paid_hours: 161.3788
+    finance_good: 0.042
+    high_stress_days: 0.0
+    stress_end_avg: 5.0139
+    rel_weeks_missed: 4.3435
+    pet_deficit_days: 17.8355
+    crisis: 0.7325
+    loan_taken: 0.48
+    best: 0.0
+    mean_stress: 1.9856
+    stress_goal: 1.0
+  greedy_optimal:
+    parents: 0.0
+    good_or_better: 0.0
+    book_finished: 0.0
+    end_value_p50: 5532.9703
+    low_day_28_35: 0.149
+    effects_count: 10.778
+    avg_effect_boost: 0.1496
+    end_effect_boost: 0.1865
+    every_week_paid_job: 0.9225
+    story_job_taken: 0.621
+    paid_hours: 315.9168
+    finance_good: 0.999
+    high_stress_days: 2.7945
+    stress_end_avg: 23.775
+    rel_weeks_missed: 6.0
+    pet_deficit_days: 47.375
+    crisis: 0.0305
+    loan_taken: 0.0005
+    best: 0.0
+    mean_stress: 24.8619
+    stress_goal: 0.8185

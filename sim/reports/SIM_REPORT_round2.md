@@ -307,9 +307,9 @@ band). The targets that miss do so for the structural reasons in the headlines, 
 
 ## 5. Charts
 
-![Cash over time](charts/cash_over_time.png)
+![Cash over time](charts/cash_over_time_round2.png)
 
-![Day of lowest cash](charts/lowest_cash_day.png)
+![Day of lowest cash](charts/lowest_cash_day_round2.png)
 
 ## 6. Effects
 
@@ -599,9 +599,9 @@ Tier shares of all runs; goal rates over all runs (a parents' run is measured up
 | Careless | 0% | 0% | 0% | 84% | 16% | 0% | 0% | 0% | 0% | 100% | 5% | book (84%) | 0% |
 | Greedy-optimal* | 0% | 0% | 0% | 100% | 0% | 0% | 0% | 0% | 0% | 84% | 100% | book (100%) | 0% |
 
-![Cash over time, recommended](charts/cash_over_time_recommended.png)
+![Cash over time, recommended](charts/cash_over_time_recommended_round2.png)
 
-![Lowest cash day, recommended](charts/lowest_cash_day_recommended.png)
+![Lowest cash day, recommended](charts/lowest_cash_day_recommended_round2.png)
 
 **Result:** 17 of 31 targets met (main variant), up from 16.
 - **Now met:** "no effect in > 70% of the top decile". Specialist niche is the highest, at exactly 70%.
