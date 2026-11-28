@@ -29,6 +29,11 @@ sim/                      # economy simulator
   src/
   tests/
   reports/                # SIM_REPORT.md and charts (committed); raw run data is gitignored
+.claude/
+  PROJECT_OPS.md          # how the GitHub Project board and the wiki are run
+  agents/project-scribe.md
+  skills/                 # /sync, /todo, /board-setup
+.wiki/                    # local clone of the GitHub wiki (gitignored; only project-scribe writes here)
 ```
 
 Create `data/`, `sim/src/`, `sim/tests/` and `sim/reports/` when you first need them.
@@ -88,6 +93,21 @@ Note: `STORY_CONCEPT_V2.md` mentions `GAME_DESIGN.md`, `TECH_SPEC.md` and a `CLA
 - When the task is done: push the branch and open a pull request with `gh pr create`,
   describing what changed and how it was tested. Link the issue if there is one ("Closes #12").
 - Don't merge pull requests yourself. Nancy reviews and merges.
+
+## Board and wiki
+
+- The GitHub Project board and the GitHub wiki are run by the `project-scribe` subagent, following `.claude/PROJECT_OPS.md`. Don't edit the board or the wiki yourself.
+- **At the end of each task**, after opening the pull request and before stopping for review, delegate to `project-scribe` with this message:
+  ```
+  MODE: end-of-task
+  Date: <YYYY-MM-DD>
+  Task: <title> · issue #<n or "none"> · PR <link>
+  What changed: <2–4 plain-language bullets>
+  New to-dos: <list or "none">
+  Questions for Nancy: <list or "none">
+  ```
+  Then add the scribe's summary to the end of your report. If the scribe fails, say so and stop anyway. Don't retry in a loop.
+- Nancy runs `/sync` at the end of a session, `/todo <idea>` to capture ideas, and `/board-setup` once to create everything.
 
 ## Terms used in the docs
 

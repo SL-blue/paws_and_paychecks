@@ -1,0 +1,37 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gh issue list *)",
+      "Bash(gh issue view *)",
+      "Bash(gh issue create *)",
+      "Bash(gh issue edit *)",
+      "Bash(gh issue comment *)",
+      "Bash(gh issue close *)",
+      "Bash(gh pr list *)",
+      "Bash(gh pr view *)",
+      "Bash(gh label list *)",
+      "Bash(gh label create *)",
+      "Bash(gh project list *)",
+      "Bash(gh project view *)",
+      "Bash(gh project field-list *)",
+      "Bash(gh project item-list *)",
+      "Bash(gh project item-add *)",
+      "Bash(gh project item-edit *)",
+      "Bash(git clone https://github.com/SL-blue/paws_and_paychecks.wiki.git .wiki)",
+      "Bash(git -C .wiki *)",
+      "Bash(git fetch origin main)",
+      "Bash(git show origin/main:*)"
+    ],
+    "deny": [
+      "Bash(gh issue delete *)",
+      "Bash(gh label delete *)",
+      "Bash(gh project delete *)",
+      "Bash(gh project item-delete *)",
+      "Bash(gh project field-delete *)",
+      "Bash(gh repo delete *)",
+      "Bash(gh pr merge *)",
+      "Bash(git -C .wiki push --force *)",
+      "Bash(git -C .wiki push -f *)"
+    ]
+  }
+}
