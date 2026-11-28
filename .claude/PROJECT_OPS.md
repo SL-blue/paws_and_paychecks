@@ -17,19 +17,19 @@ Audience: Nancy and her friends. Story spoilers (endings, week-5 events) are fin
 
 ## 2. GitHub Project (board)
 
-**Project:** `Paws & Paychecks v2`, owned by `SL-blue`, linked to `SL-blue/paws_and_paychecks`, visibility public.
+**Project:** `paws and paychecks-progress tracking` (user project **#2**, https://github.com/users/SL-blue/projects/2), owned by `SL-blue`, linked to `SL-blue/paws_and_paychecks`, visibility public. Nancy created it; look it up by number, not by title.
 
 ### Fields
 
 | Field | Type | Values |
 |---|---|---|
 | Status | single select | `Backlog` · `Ready` · `In progress` · `In review` · `Done` |
-| Priority | single select | `P0 now` · `P1 next` · `P2 later` |
-| Size | single select | `S` (< 1 session) · `M` (1–3 sessions) · `L` (too big: split it) |
+| Priority | single select | `P0` (now) · `P1` (next) · `P2` (later) |
+| Size | single select | `XS` · `S` (< 1 session) · `M` (1–3 sessions) · `L` (several sessions) · `XL` (too big: split it) |
 
 - `In review` = the task is finished and its PR is open, waiting for Nancy (matches `CLAUDE.md`'s "stop and wait for review").
 - **Approval = Nancy merging the PR.** The PR says "Closes #n", so merging closes the issue, and GitHub's built-in project workflows set `Done`. The scribe only checks that this happened. It may also set `Done` when Nancy's approval is quoted to it (for work without a PR).
-- Size is a rough guess, set when the issue is created. Its main use: any `L` gets split before work starts.
+- Size is a rough guess, set when the issue is created. Its main use: any `XL` gets split before work starts, usually into sub-issues (see below).
 - Milestones use GitHub's built-in **Milestones**, not a custom field.
 
 ### Labels (issue type)
@@ -64,6 +64,15 @@ The agent **must not create new milestones** outside setup; it proposes them in 
   ```
 - `decision-needed` issues are closed **only** after a matching line exists in `design/DECISIONS.md` on `main`; the closing comment links to it.
 - Never delete issues. Close duplicates as "not planned" with a link to the kept one.
+
+### Parent issues (sub-issues)
+
+- Use a parent issue only for a real cluster of related work inside **one** milestone (e.g. "Sim round 2: owner decisions"). Milestones group by phase; parents group by topic within a phase.
+- **One level only:** a sub-issue never has its own sub-issues.
+- Labels, Priority and Size go on the sub-issues. A parent gets only its milestone and a title without a type prefix, e.g. `Economy simulator`.
+- A parent closes when all its sub-issues are closed.
+- New issues (from `/todo` or end-of-task) go under an existing parent when they clearly belong to its topic and milestone; otherwise they stay standalone. Don't create new parents outside setup; propose them in the summary.
+- Link with the GraphQL `addSubIssue` mutation (`gh` has no sub-issue command).
 
 ## 3. Wiki
 
@@ -141,7 +150,7 @@ Seed sources:
 - The platform/engine decision → a `decision-needed` issue under M3
 - Wiki: replace the placeholder `Home`, create the pages in §3, and add an empty `Notes/` index page
 
-Manual steps for Nancy in the web UI (the CLI can't do these reliably): set the Status options, create the three views, check the built-in workflows ("Item closed" and "Pull request merged" → `Done`; "Auto-add to project" for this repo).
+Manual steps for Nancy in the web UI (the CLI can't do these reliably): create the three views, check the built-in workflows ("Item closed" and "Pull request merged" → `Done`; "Auto-add to project" for this repo).
 
 ## 7. Visibility note
 
