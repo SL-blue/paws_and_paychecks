@@ -102,7 +102,7 @@ Four entangled lines: **the pet's growth**, **the character's career**, **money*
 
 ## The character's own book project
 
-- **Self-initiated, or in between** (e.g. a small contract the character fought for, with a modest advance that doesn't cover the real time it takes). Not a fully commissioned job.
+- **Self-initiated** (decided 2026-11-27): no contract and not a commissioned job. If the book is finished, it gets paid **after the game ends**, so the payment never affects money during the run.
 - **Starts with progress already made:** the character has been translating it in spare time for months, since before the move. The existing pages anchor the character's voice and partly explain why they chose translation without stating it.
 - **What remains are the hard parts:** the chapters the character kept putting off. This justifies a slower, more careful pace (choosing words and phrases) and gives the in-game work emotional weight. Starting progress and which chapters remain can vary per run.
 - **Time budget:** finishing should be a real sacrifice, but doable. Its size is tuned so that a balanced (careful) player finishes in about 40–50% of runs; the starting progress varies only a little between runs, so finishing depends on choices, not dice.
@@ -171,7 +171,6 @@ Four entangled lines: **the pet's growth**, **the character's career**, **money*
 
 ## Open questions
 
-- Whether the book project is fully self-initiated or under a small contract (either way, no advance is paid during the run).
 - How taxes are shown (net pay, a tax jar or a tax bill).
 - Regular clients' individual habits and further fixed story commissions.
 - Why the character and partner live apart.
